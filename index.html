@@ -1,319 +1,248 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Class Chat</title>
-    <!-- Load Tailwind CSS for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Use Inter font family -->
-    <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f4f7f9; }
-        .chat-container { height: calc(100vh - 120px); }
-        .message-bubble { max-width: 80%; }
-        /* Style for the scrollbar */
-        .message-list::-webkit-scrollbar { width: 8px; }
-        .message-list::-webkit-scrollbar-track { background: #e0e7ff; }
-        .message-list::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 4px; }
-        .message-list::-webkit-scrollbar-thumb:hover { background: #4f46e5; }
-    </style>
+  <meta charset="UTF-8" />
+  <title>Chat App</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #chat {
+      flex-grow: 1;
+      padding: 15px;
+      overflow-y: scroll;
+      background: white;
+    }
+
+    #input-container {
+      flex-shrink: 0;
+      background: white;
+      border-top: 1px solid #ccc;
+      padding: 10px;
+    }
+
+    #messageInput {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      box-sizing: border-box;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+
+    /* --- Message Styles for Profiling and Bubbles --- */
+
+    .message-row {
+      display: flex;
+      margin-bottom: 15px;
+    }
+
+    .message-content {
+      /* Main bubble styling */
+      padding: 8px 12px;
+      border-radius: 18px;
+      max-width: 70%;
+      word-wrap: break-word;
+    }
+
+    .message-info {
+      font-size: 12px;
+      margin-bottom: 2px;
+      font-weight: bold;
+    }
+
+    /* Message Sent by YOU (client) */
+    .message-row.mine {
+      justify-content: flex-end; /* Push to the right */
+    }
+
+    .message-row.mine .message-info {
+        text-align: right;
+        color: #007bff; /* Blue for my name */
+    }
+
+    .message-row.mine .message-content {
+      background: #007bff; /* Blue bubble */
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    /* Message Sent by OTHERS */
+    .message-row.theirs {
+      justify-content: flex-start; /* Stay on the left */
+    }
+
+    .message-row.theirs .message-info {
+        text-align: left;
+        color: #28a745; /* Green for others' names */
+    }
+
+    .message-row.theirs .message-content {
+      background: #e6ffec; /* Light green bubble */
+      color: #333;
+      border: 1px solid #d4e7d7;
+      border-bottom-left-radius: 4px;
+    }
+
+    /* System Messages */
+    .message-row.system {
+        justify-content: center;
+        text-align: center;
+    }
+    .message-row.system .message-content {
+      background: none;
+      font-style: italic;
+      color: #666;
+      max-width: 100%;
+      border-radius: 0;
+      padding: 0;
+    }
+  </style>
 </head>
 <body>
-
-<div id="app" class="flex flex-col h-screen antialiased text-gray-800">
-    <div class="flex flex-col h-full">
-
-        <!-- Header -->
-        <header class="bg-white p-4 shadow-md sticky top-0 z-10">
-            <h1 class="text-2xl font-bold text-indigo-600">Class Messenger</h1>
-            <p class="text-sm text-gray-500 mt-1">
-                Your ID: <span id="userIdDisplay" class="font-mono bg-yellow-100 px-2 py-0.5 rounded-md text-xs">Loading...</span>
-            </p>
-        </header>
-
-        <!-- Loading & Error -->
-        <div id="statusMessage" class="p-4 text-center text-sm text-red-500 hidden"></div>
-        <div id="loading" class="flex-grow flex items-center justify-center p-4">
-            <svg class="animate-spin h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span class="ml-3 text-indigo-500">Connecting to chat...</span>
-        </div>
-
-        <!-- Chat Messages Area -->
-        <div id="messageList" class="message-list flex-grow overflow-y-auto p-4 space-y-4 bg-gray-50">
-            <!-- Messages will be injected here -->
-        </div>
-
-        <!-- Message Input Form -->
-        <div class="bg-white p-4 shadow-lg sticky bottom-0 z-10">
-            <form id="messageForm" class="flex items-center space-x-3">
-                <input
-                    type="text"
-                    id="messageInput"
-                    placeholder="Type your message here..."
-                    autocomplete="off"
-                    required
-                    class="flex-grow p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"
-                />
-                <button
-                    type="submit"
-                    id="sendButton"
-                    class="bg-indigo-600 text-white p-3 rounded-xl shadow-lg hover:bg-indigo-700 transition duration-150 transform hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
-                    disabled
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                </button>
-            </form>
-        </div>
+  <div id="namePrompt" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 100;">
+    <div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+      <h2 style="margin-top: 0; font-size: 1.5em;">Choose a Display Name</h2>
+      <input id="nameInput" type="text" placeholder="Your Name" style="padding: 10px; margin: 15px 0; width: 250px; border: 1px solid #ccc; border-radius: 4px;" maxlength="20" />
+      <button id="nameSubmit" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Join Chat</button>
     </div>
-</div>
+  </div>
+  <div id="chat"></div>
+  <div id="input-container">
+    <input id="messageInput" type="text" placeholder="Type a message... (Connect to send)" disabled />
+  </div>
 
-<!-- Firebase SDK Imports (must be type="module") -->
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, addDoc, onSnapshot, collection, query, orderBy, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+  <script>
+    const chat = document.getElementById("chat");
+    const messageInput = document.getElementById("messageInput");
+    const namePrompt = document.getElementById("namePrompt");
+    const nameInput = document.getElementById("nameInput");
+    const nameSubmit = document.getElementById("nameSubmit");
+    
+    let userName = "Anonymous";
+    let clientId = Math.random().toString(36).substring(2, 9); // Unique ID for client tracking
 
-    // --- GLOBAL VARIABLES (Provided by Canvas) ---
-    // Mandatory checks for global variables
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-chat-app-id';
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    // --- Message Rendering Function ---
+    function renderMessage(data) {
+      const row = document.createElement("div");
+      row.classList.add("message-row");
 
-    // Firebase instances
-    let app, db, auth, userId = null;
+      const content = document.createElement("div");
+      content.classList.add("message-content");
+      
+      let senderName = data.sender === "system" ? "System" : (data.senderName || "Unknown");
+      
+      // Determine if the message is from this client
+      if (data.clientId && data.clientId === clientId) {
+          row.classList.add("mine");
+      } else if (data.sender !== "system") {
+          row.classList.add("theirs");
+      } else {
+          row.classList.add("system");
+      }
 
-    // DOM Elements
-    const messageListEl = document.getElementById('messageList');
-    const messageInput = document.getElementById('messageInput');
-    const messageForm = document.getElementById('messageForm');
-    const sendButton = document.getElementById('sendButton');
-    const userIdDisplay = document.getElementById('userIdDisplay');
-    const loadingEl = document.getElementById('loading');
-    const statusMessageEl = document.getElementById('statusMessage');
-
-    /**
-     * Shows an error message in the status area.
-     * @param {string} message The error message to display.
-     */
-    function showStatus(message, isError = true) {
-        statusMessageEl.textContent = message;
-        statusMessageEl.classList.remove('hidden');
-        if (isError) {
-            statusMessageEl.classList.add('text-red-500');
-            statusMessageEl.classList.remove('text-green-500');
-        } else {
-            statusMessageEl.classList.add('text-green-500');
-            statusMessageEl.classList.remove('text-red-500');
-        }
+      // Append sender name above the bubble (except for system messages)
+      if (data.sender !== "system") {
+        const info = document.createElement("div");
+        info.classList.add("message-info");
+        info.textContent = senderName;
+        row.appendChild(info);
+      }
+      
+      content.textContent = data.text;
+      
+      // Order the elements correctly for styling (name then content)
+      if (data.sender !== "system") {
+          row.appendChild(content);
+      } else {
+          // System message: only content (no info)
+          row.appendChild(content);
+      }
+      
+      chat.appendChild(row);
+      chat.scrollTop = chat.scrollHeight;
     }
+    
+    // --- WebSocket Setup ---
+    const protocol = location.protocol === "https:" ? "wss" : "ws";
+    let socket;
 
-    /**
-     * Initializes Firebase and authenticates the user.
-     */
-    async function initializeFirebase() {
-        if (!firebaseConfig) {
-            loadingEl.classList.add('hidden');
-            showStatus("Firebase Configuration is missing. Cannot initialize chat.");
+    function initializeSocket(name) {
+        // FIX: Ensures a valid host URL.
+        const host = location.host || location.hostname; 
+        const wsUrl = `${protocol}://${host}`;
+        
+        console.log(`Attempting to connect to: ${wsUrl}`); 
+
+        socket = new WebSocket(wsUrl);
+        
+        socket.addEventListener("open", () => {
+             // 1. Send client ID and User Name immediately upon connection
+            socket.send(JSON.stringify({ type: "init", name: name, clientId: clientId }));
+            messageInput.disabled = false; // ENABLE INPUT HERE
+            messageInput.placeholder = "Type a message...";
+        });
+
+        socket.addEventListener("message", async (event) => {
+          let data;
+          try {
+            const messageData = event.data instanceof Blob ? await event.data.text() : event.data;
+            data = JSON.parse(messageData);
+          } catch (err) {
+            console.error("Failed to parse message:", err);
             return;
-        }
+          }
 
-        try {
-            app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            setLogLevel('Debug'); // Enable debug logging for Firestore
+          // Render only chat messages, ignore server 'init' responses
+          if (data.type !== "init") {
+              renderMessage(data);
+          }
+        });
 
-            // Sign in using the custom token or anonymously if no token is available
-            if (initialAuthToken) {
-                await signInWithCustomToken(auth, initialAuthToken);
-            } else {
-                await signInAnonymously(auth);
-            }
-
-            // Listen for auth state changes to get the final user ID
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    userId = user.uid;
-                    userIdDisplay.textContent = userId;
-                    loadingEl.classList.add('hidden');
-                    sendButton.disabled = false;
-                    setupRealTimeListener();
-                    showStatus('Connection established. Start chatting!', false);
-                } else {
-                    // This case should be rare, but handles sign out or errors
-                    loadingEl.classList.add('hidden');
-                    sendButton.disabled = true;
-                    showStatus("Authentication failed. Please check the console for details.");
-                }
-            });
-
-        } catch (error) {
-            loadingEl.classList.add('hidden');
-            sendButton.disabled = true;
-            console.error("Firebase Initialization or Authentication Error:", error);
-            showStatus(`Failed to connect: ${error.message}`);
-        }
-    }
-
-    /**
-     * Scrolls the message list to the bottom.
-     */
-    function scrollToBottom() {
-        messageListEl.scrollTop = messageListEl.scrollHeight;
-    }
-
-    /**
-     * Formats a Firebase Timestamp object into a readable string.
-     * @param {Object} timestamp The Firebase Timestamp object.
-     * @returns {string} Formatted time string.
-     */
-    function formatTimestamp(timestamp) {
-        if (!timestamp) return '';
-        const date = timestamp.toDate();
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-
-    /**
-     * Renders a single message element.
-     * @param {Object} msg The message object.
-     * @param {string} currentUserId The current user's ID.
-     * @returns {string} HTML string for the message.
-     */
-    function renderMessage(msg, currentUserId) {
-        const isMe = msg.senderId === currentUserId;
-        const timeStr = formatTimestamp(msg.timestamp);
-
-        const senderClass = isMe
-            ? 'self-end bg-indigo-600 text-white rounded-br-none'
-            : 'self-start bg-white text-gray-800 rounded-tl-none border border-gray-200';
-        const senderText = isMe
-            ? 'You'
-            : msg.senderId.substring(0, 8); // Show first 8 chars of the other user's ID
-
-        return `
-            <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
-                <div class="message-bubble p-3 rounded-xl shadow-md ${senderClass}">
-                    <div class="text-xs font-semibold mb-1 ${isMe ? 'text-indigo-200' : 'text-indigo-600'}">
-                        ${senderText}
-                    </div>
-                    <div class="text-sm break-words">
-                        ${msg.content}
-                    </div>
-                    <div class="text-xs mt-1 text-right ${isMe ? 'text-indigo-300' : 'text-gray-400'}">
-                        ${timeStr}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    /**
-     * Sets up the real-time listener for the chat collection.
-     */
-    function setupRealTimeListener() {
-        // Path for public/shared data: /artifacts/{appId}/public/data/class_chat
-        const chatCollectionPath = `artifacts/${appId}/public/data/class_chat`;
-        const chatRef = collection(db, chatCollectionPath);
-
-        // Create a query: Get all messages, sorted by timestamp (ascending)
-        // NOTE: Firebase queries require an index if orderBy is used. To simplify and avoid index issues, we will
-        // fetch and sort client-side. However, for a chat app, we MUST use a sorting mechanism.
-        // For this scenario, we use serverTimestamp() which is an auto-indexed field.
-        const q = query(chatRef, orderBy("timestamp", "asc"));
-
-        onSnapshot(q, (snapshot) => {
-            let messagesHtml = '';
-            let shouldScroll = false;
-
-            // Check if the user is near the bottom before update
-            if (messageListEl.scrollHeight - messageListEl.clientHeight <= messageListEl.scrollTop + 50) {
-                shouldScroll = true;
-            }
-
-            // Build the HTML for the new set of messages
-            snapshot.docs.forEach((doc) => {
-                const message = doc.data();
-                messagesHtml += renderMessage(message, userId);
-            });
-
-            // Update the DOM
-            messageListEl.innerHTML = messagesHtml;
-
-            // Scroll if a new message arrived or if the user was near the bottom
-            if (shouldScroll || snapshot.docChanges().length > 0) {
-                 // Check if the last doc change was an added message
-                const lastChange = snapshot.docChanges().find(change => change.type === 'added');
-                if (lastChange) {
-                    scrollToBottom();
-                } else if (snapshot.docChanges().length === 0) {
-                    // Initial load
-                    scrollToBottom();
-                }
-            }
-
-
-        }, (error) => {
-            console.error("Firestore onSnapshot Error:", error);
-            showStatus(`Error fetching messages: ${error.message}`);
+        socket.addEventListener("close", () => {
+             // Simple reconnection logic
+             messageInput.disabled = true;
+             messageInput.placeholder = "Disconnected. Retrying...";
+             window.setTimeout(() => initializeSocket(name), 3000); // Use window.setTimeout
+        });
+        
+        socket.addEventListener("error", (err) => {
+            console.error("WebSocket Error:", err);
+            socket.close();
         });
     }
 
-    /**
-     * Handles the submission of a new message.
-     * @param {Event} e The submit event.
-     */
-    async function handleSendMessage(e) {
-        e.preventDefault();
-
-        if (!userId) {
-            showStatus("User not authenticated. Please wait for connection or refresh.");
-            return;
-        }
-
-        const content = messageInput.value.trim();
-        if (content === "") return;
-
-        // Disable UI temporarily
-        sendButton.disabled = true;
-        messageInput.disabled = true;
-
-        const chatCollectionPath = `artifacts/${appId}/public/data/class_chat`;
-        const chatRef = collection(db, chatCollectionPath);
-
-        const messageData = {
-            senderId: userId,
-            content: content,
-            timestamp: serverTimestamp() // Use Firestore's server timestamp
-        };
-
-        try {
-            await addDoc(chatRef, messageData);
-            messageInput.value = ''; // Clear input on success
-        } catch (error) {
-            console.error("Error sending message:", error);
-            showStatus(`Failed to send message: ${error.message}`);
-        } finally {
-            // Re-enable UI
-            sendButton.disabled = false;
-            messageInput.disabled = false;
-            messageInput.focus();
-        }
-    }
-
     // --- Event Listeners ---
-    messageForm.addEventListener('submit', handleSendMessage);
-    messageInput.addEventListener('input', () => {
-        sendButton.disabled = !messageInput.value.trim() || !userId;
+    nameSubmit.addEventListener("click", () => {
+        const name = nameInput.value.trim();
+        if (name) {
+            userName = name;
+            namePrompt.style.display = "none"; // Ensure modal is hidden
+            initializeSocket(userName);
+        }
+    });
+    
+    nameInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            nameSubmit.click();
+        }
     });
 
-    // --- Start the App ---
-    window.onload = initializeFirebase;
-
-</script>
+    messageInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && messageInput.value.trim() !== "" && socket.readyState === WebSocket.OPEN) {
+        const text = messageInput.value.trim();
+        // Send a structured message containing the text, name, and client ID
+        socket.send(JSON.stringify({ type: "chat", text: text, name: userName, clientId: clientId }));
+        messageInput.value = "";
+      }
+    });
+  </script>
 </body>
 </html>
