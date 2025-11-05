@@ -1,68 +1,9 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const WebSocket = require("ws");
-const Database = require("better-sqlite3");
 
-// --- Configuration ---
-const MAX_CHAR_LIMIT = 500;
-const ALLOWED_MIMES = [
-    'image/gif', 
-    'image/png', 
-    'image/jpeg', 
-    'video/mp4'
-];
-
-/**
- * Validates if the given file URL/Base64 string is of an allowed type.
- * @param {string} fileType The MIME type string.
- * @param {string} fileUrl The file URL or Base64 Data URL.
- * @returns {boolean} True if valid.
- */
-function isValidMedia(fileType, fileUrl) {
-    if (!fileUrl) return false;
-    
-    // 1. Check MIME type against allowed list
-    if (!ALLOWED_MIMES.includes(fileType)) {
-        return false;
-    }
-
-    // 2. Check for malicious Base64/Data URL formats (simple check)
-    if (fileUrl.startsWith('data:')) {
-        // Ensure the data URL starts with the correct MIME type
-        return fileUrl.startsWith(`data:${fileType};base64,`);
-    }
-
-    // 3. For Tenor URLs, check the extension (optional, as MIME is primary)
-    if (fileUrl.startsWith('http')) {
-        const ext = path.extname(fileUrl).toLowerCase();
-        return (fileType === 'image/gif' && (ext === '.gif' || ext === '.mp4')) || 
-               (fileType === 'video/mp4' && ext === '.mp4');
-    }
-
-    return false;
-}
-
-// Setup SQLite DB
-const db = new Database("chat.db");
-
-// Database columns are unchanged from previous update
-db.prepare(`
-  CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sender TEXT,
-    senderName TEXT, 
-    clientId TEXT,     
-    text TEXT,
-    fileUrl TEXT,
-    fileType TEXT,
-    timestamp TEXT
-  )
-`).run();
-
-// Serve index.html
 const server = http.createServer((req, res) => {
-  if (req.url === "/") {
+  if (req.url === "/" || req.url === "/index.html") {
     const filePath = path.join(__dirname, "index.html");
     fs.readFile(filePath, (err, data) => {
       if (err) {
@@ -74,136 +15,18 @@ const server = http.createServer((req, res) => {
       res.end(data);
     });
   } else {
-    res.writeHead(404);
-    res.end("Not found");
-  }
-});
-
-const wss = new WebSocket.Server({ server });
-
-wss.on("connection", (ws) => {
-  ws.session = {
-      clientId: null,
-      userName: "Unknown User"
-  };
-
-  ws.on("message", async (data) => {
-    let msgData;
-    try {
-        msgData = JSON.parse(data.toString());
-    } catch (e) {
-        console.error("Failed to parse incoming JSON:", data.toString());
-        return;
-    }
-    
-    const { type, name, clientId } = msgData;
-
-    // --- Handle Typing Signal ---
-    if (type === "typing") {
-        // Broadcast the typing status to everyone *except* the sender
-        wss.clients.forEach((client) => {
-            if (client.readyState === WebSocket.OPEN && client !== ws) {
-                client.send(JSON.stringify({
-                    type: "typing",
-                    isTyping: msgData.isTyping,
-                    senderName: name, 
-                    clientId: clientId
-                }));
-            }
-        });
-        return; 
-    }
-
-    // --- Handle Client Initialization (INIT) ---
-    if (type === "init") {
-        ws.session.clientId = clientId;
-        ws.session.userName = name || "Unknown User";
-        
-        console.log(`User ${ws.session.userName} (${ws.session.clientId}) connected.`);
-        
-        // Send history 
-        const savedMessages = db.prepare("SELECT senderName, clientId, text, fileUrl, fileType FROM messages ORDER BY id ASC").all();
-        
-        savedMessages.forEach((msg) => {
-            ws.send(JSON.stringify({
-                type: "chat",
-                sender: "user",
-                senderName: msg.senderName,
-                clientId: msg.clientId, 
-                text: msg.text,
-                fileUrl: msg.fileUrl,
-                fileType: msg.fileType
-            }));
-        });
-        
-        // Broadcast welcome message
-        const welcomeMsg = { sender: "system", text: `${ws.session.userName} has joined the chat!` };
-        wss.clients.forEach((client) => {
-          if (client.readyState === WebSocket.OPEN) {
-             client.send(JSON.stringify(welcomeMsg));
-          }
-        });
-        
-        return; 
-    }
-    
-    // --- Handle Chat or File Message ---
-    if (type === "chat" || type === "file") {
-        let text = (msgData.text || '').trim().substring(0, MAX_CHAR_LIMIT); // Enforce max length
-        let fileUrl = msgData.fileUrl || null;
-        let fileType = msgData.fileType || null;
-        
-        if (fileUrl && fileType) {
-            // Server-side media validation
-            if (!isValidMedia(fileType, fileUrl)) {
-                 ws.send(JSON.stringify({ sender: "system", text: `Error: Invalid file type or format detected.` }));
-                 return;
-            }
-        }
-        
-        // Must have either text OR a valid media file
-        if (!text && !fileUrl) return;
-
-        // Construct the message object for saving/broadcasting
-        const msg = {
-          type: "chat",
-          sender: "user",
-          senderName: name, 
-          clientId: clientId, 
-          text: text,
-          fileUrl: fileUrl,
-          fileType: fileType,
-          timestamp: new Date().toISOString(),
-        };
-
-        // Save to DB
-        db.prepare("INSERT INTO messages (sender, senderName, clientId, text, fileUrl, fileType, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)")
-          .run(msg.sender, msg.senderName, msg.clientId, msg.text, msg.fileUrl, msg.fileType, msg.timestamp);
-
-        // Broadcast to all clients
-        wss.clients.forEach((client) => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify(msg));
-          }
-        });
-    }
-  });
-
-  ws.on('close', () => {
-    console.log(`User ${ws.session.userName} disconnected.`);
-    // Broadcast 'stopped typing'
-    wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({
-                type: "typing",
-                isTyping: false,
-                senderName: ws.session.userName, 
-                clientId: ws.session.clientId
-            }));
-        }
+    // Basic support for any other files (like favicons)
+    const filePath = path.join(__dirname, req.url);
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end("Not found");
+      } else {
+        res.writeHead(200);
+        res.end(data);
+      }
     });
-  });
-
+  }
 });
 
 const PORT = process.env.PORT || 10000;
