@@ -13,10 +13,40 @@ const ALLOWED_MIMES = [
     'video/mp4'
 ];
 
+/**
+ * Validates if the given file URL/Base64 string is of an allowed type.
+ * @param {string} fileType The MIME type string.
+ * @param {string} fileUrl The file URL or Base64 Data URL.
+ * @returns {boolean} True if valid.
+ */
+function isValidMedia(fileType, fileUrl) {
+    if (!fileUrl) return false;
+    
+    // 1. Check MIME type against allowed list
+    if (!ALLOWED_MIMES.includes(fileType)) {
+        return false;
+    }
+
+    // 2. Check for malicious Base64/Data URL formats (simple check)
+    if (fileUrl.startsWith('data:')) {
+        // Ensure the data URL starts with the correct MIME type
+        return fileUrl.startsWith(`data:${fileType};base64,`);
+    }
+
+    // 3. For Tenor URLs, check the extension (optional, as MIME is primary)
+    if (fileUrl.startsWith('http')) {
+        const ext = path.extname(fileUrl).toLowerCase();
+        return (fileType === 'image/gif' && (ext === '.gif' || ext === '.mp4')) || 
+               (fileType === 'video/mp4' && ext === '.mp4');
+    }
+
+    return false;
+}
+
 // Setup SQLite DB
 const db = new Database("chat.db");
 
-// Updated: Added fileUrl and fileType columns
+// Database columns are unchanged from previous update
 db.prepare(`
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,7 +121,7 @@ wss.on("connection", (ws) => {
         
         console.log(`User ${ws.session.userName} (${ws.session.clientId}) connected.`);
         
-        // Send history (now includes fileUrl and fileType)
+        // Send history 
         const savedMessages = db.prepare("SELECT senderName, clientId, text, fileUrl, fileType FROM messages ORDER BY id ASC").all();
         
         savedMessages.forEach((msg) => {
@@ -120,26 +150,18 @@ wss.on("connection", (ws) => {
     // --- Handle Chat or File Message ---
     if (type === "chat" || type === "file") {
         let text = (msgData.text || '').trim().substring(0, MAX_CHAR_LIMIT); // Enforce max length
-        let fileUrl = null;
-        let fileType = null;
+        let fileUrl = msgData.fileUrl || null;
+        let fileType = msgData.fileType || null;
         
-        if (type === "file") {
-            const base64Data = msgData.file;
-            fileType = msgData.fileType;
-
-            // 1. Server-side Validation
-            if (!ALLOWED_MIMES.includes(fileType)) {
-                 ws.send(JSON.stringify({ sender: "system", text: `Error: File type ${fileType} is not supported.` }));
+        if (fileUrl && fileType) {
+            // Server-side media validation
+            if (!isValidMedia(fileType, fileUrl)) {
+                 ws.send(JSON.stringify({ sender: "system", text: `Error: Invalid file type or format detected.` }));
                  return;
             }
-            
-            // 2. IMPORTANT: Due to the nature of Render's ephemeral filesystem, 
-            //    we will store the file data directly as a Base64 Data URL 
-            //    in the database instead of saving a file to disk.
-            fileUrl = base64Data; // base64Data is already a full Data URL
         }
-
-        // Must have either text OR a file
+        
+        // Must have either text OR a valid media file
         if (!text && !fileUrl) return;
 
         // Construct the message object for saving/broadcasting
@@ -169,7 +191,7 @@ wss.on("connection", (ws) => {
 
   ws.on('close', () => {
     console.log(`User ${ws.session.userName} disconnected.`);
-    // Broadcast 'stopped typing' just in case
+    // Broadcast 'stopped typing'
     wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify({
