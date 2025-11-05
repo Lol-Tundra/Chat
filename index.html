@@ -25,8 +25,8 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // =========================================================================
-        // 🔑 🔑 🔑 PASTE YOUR FIREBASE CONFIG HERE 🔑 🔑 🔑
-        // Ensure the entire object is wrapped in single quotes (')
+        // 🔑 🔑 🔑 YOUR FIREBASE CONFIGURATION INJECTED BELOW 🔑 🔑 🔑
+        // =========================================================================
         const FIREBASE_CONFIG_JSON = '{"apiKey": "AIzaSyD7n6A1XYZT6wKfIIpBkliDvdyaURbtmVk", "authDomain": "chat-aaa96.firebaseapp.com", "projectId": "chat-aaa96", "storageBucket": "chat-aaa96.firebasestorage.app", "messagingSenderId": "613089876723", "appId": "1:613089876723:web:52192b3e2d692190a9b586", "measurementId": "G-DD3QNTFSS7"}';
         // =========================================================================
         
@@ -81,6 +81,7 @@
                 userId = user.uid;
             } else {
                 try {
+                    // Sign in anonymously if no user is found
                     await signInAnonymously(auth);
                 } catch(error) {
                     console.error("Auth initialization failed:", error);
@@ -90,15 +91,18 @@
             
             if (userId) {
                 window.userId = userId;
-                // Execute the main application logic
+                // Execute the main application logic once authenticated
                 const scriptElement = document.createElement('script');
                 scriptElement.id = "main-script-logic";
-                scriptElement.textContent = document.getElementById('main-script').textContent;
+                // Clone the logic from the placeholder script
+                scriptElement.textContent = document.getElementById('main-script-logic-placeholder').textContent; 
                 document.body.appendChild(scriptElement);
             }
         });
     </script>
     
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+
     <style>
         :root {
             /* Discord Colors (Dark Theme) */
@@ -223,7 +227,7 @@
             border-radius: 4px;
             cursor: pointer;
             color: var(--text-secondary);
-            transition: background-color 0.1s, color 0.1s;
+            transition: background-color 0.1s, color: 0.1s;
         }
 
         .channel-item:hover {
@@ -541,6 +545,31 @@
             font-weight: bold;
             color: var(--accent-blue);
         }
+        
+        /* Responsive adjustments for mobile */
+        @media (max-width: 600px) {
+            #server-list {
+                width: 50px;
+            }
+            #channel-list {
+                width: 180px;
+            }
+            #user-id-display {
+                max-width: 80px;
+            }
+            #message-container {
+                padding: 0 10px;
+            }
+            .message-avatar {
+                width: 30px;
+                height: 30px;
+                font-size: 12px;
+                margin-right: 10px;
+            }
+            .message-username, .message-text {
+                font-size: 14px;
+            }
+        }
 
     </style>
 </head>
@@ -654,7 +683,7 @@
         </div>
     </div>
     
-    <script id="main-script" type="text/plain">
+    <script id="main-script-logic-placeholder" type="text/plain">
         
         // --- CONSTANTS ---
         const COOLDOWN_DAYS = 7;
@@ -703,8 +732,8 @@
         }
 
         async function loadMyProfile() {
-            const profileRef = getProfileDocRef(window.userId);
-            const docSnap = await getDoc(profileRef);
+            const profileRef = window.getProfileDocRef(window.userId);
+            const docSnap = await window.getDoc(profileRef);
 
             if (docSnap.exists()) {
                 myProfile = docSnap.data();
@@ -716,7 +745,7 @@
                     lastUsernameChange: null,
                     avatar: getInitials(defaultName)
                 };
-                await setDoc(profileRef, myProfile);
+                await window.setDoc(profileRef, myProfile);
             }
             
             // Update UI elements
@@ -757,7 +786,7 @@
         
         // --- MODAL FUNCTIONS ---
         
-        function showProfileModal() {
+        window.showProfileModal = function() {
             if (!myProfile.name) return;
             
             document.getElementById('modal-uid').textContent = window.userId;
@@ -768,18 +797,18 @@
             profileModal.style.display = 'flex';
         }
         
-        function closeProfileModal() {
+        window.closeProfileModal = function() {
             profileModal.style.display = 'none';
             cooldownStatus.textContent = '';
         }
         
-        function showDMModal() {
+        window.showDMModal = function() {
             dmRecipientInput.value = '';
             dmError.textContent = '';
             dmModal.style.display = 'flex';
         }
         
-        function closeDMModal() {
+        window.closeDMModal = function() {
             dmModal.style.display = 'none';
         }
 
@@ -827,6 +856,7 @@
             const textDiv = document.createElement('div');
             textDiv.className = 'message-text';
             
+            // Regex for basic URL detection and linkification
             const linkRegex = /(https?:\/\/[^\s]+)/g;
             const linkifiedText = msg.text.replace(linkRegex, (url) => 
                 `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
@@ -839,6 +869,7 @@
             // Insert the new message while maintaining the reversed order based on timestamp
             // Since chatScroller has column-reverse, appending ensures it appears at the bottom (most recent)
             chatScroller.appendChild(chatMessage);
+            chatScroller.parentElement.scrollTop = chatScroller.parentElement.scrollHeight; // Scroll to bottom
         }
 
         /**
@@ -852,8 +883,8 @@
                 senderName = myProfile.name;
             } else {
                 if (!profileCache[senderId]) {
-                    const profileRef = getProfileDocRef(senderId);
-                    const docSnap = await getDoc(profileRef);
+                    const profileRef = window.getProfileDocRef(senderId);
+                    const docSnap = await window.getDoc(profileRef);
                     if (docSnap.exists()) {
                         profileCache[senderId] = docSnap.data();
                     } else {
@@ -882,14 +913,15 @@
             let headerIcon = '#';
 
             if (channelType === 'group' && channelId === 'general') {
-                messagesColRef = getPublicColRef('general-chat-messages');
+                messagesColRef = window.getPublicColRef('general-chat-messages');
+                headerIcon = '#';
             } else if (channelType === 'dm') {
-                messagesColRef = getPublicColRef('dm-messages');
+                messagesColRef = window.getPublicColRef('dm-messages');
                 
                 const dmChannelInfo = dmChannels[channelId];
                 if (dmChannelInfo) {
                     headerName = dmChannelInfo.otherUserName;
-                    headerIcon = getInitials(dmChannelInfo.otherUserName);
+                    headerIcon = dmChannelInfo.otherUserAvatar;
                 }
             } else {
                 return;
@@ -901,14 +933,16 @@
             messageInput.placeholder = `Message ${channelType === 'group' ? '#' : '@'}${headerName}`;
 
             // Query the messages for the specific channel, ordered by timestamp
-            const q = query(
+            // Note: No orderBy used to avoid index requirements; messages are sorted client-side by timestamp in renderMessage.
+            const q = window.query(
                 messagesColRef,
-                where('channelId', '==', channelId),
-                // We trust client to manage order with the DOM for simplicity
+                window.where('channelId', '==', channelId),
             );
 
             // Start the real-time listener (onSnapshot)
-            unsubscribe = onSnapshot(q, (snapshot) => {
+            unsubscribe = window.onSnapshot(q, (snapshot) => {
+                let initialLoad = chatScroller.children.length === 0;
+
                 // Process only new messages
                 snapshot.docChanges().forEach(async (change) => {
                     if (change.type === "added") {
@@ -920,6 +954,10 @@
                 messageInput.disabled = false;
                 sendButton.disabled = false;
                 messageInput.focus();
+
+                if (initialLoad) {
+                    chatScroller.parentElement.scrollTop = chatScroller.parentElement.scrollHeight;
+                }
             }, (error) => {
                 console.error("Error listening to channel:", error);
                 messageInput.placeholder = "Connection Error";
@@ -946,8 +984,8 @@
             // 2. Clear and rebuild DM list
             dmList.innerHTML = '';
             const sortedDmIds = Object.keys(dmChannels).sort((a, b) => {
-                // Simple string sort, could be updated to sort by last message time
-                return a.localeCompare(b);
+                // Sort by the other user's name
+                return dmChannels[a].otherUserName.localeCompare(dmChannels[b].otherUserName);
             });
 
             sortedDmIds.forEach(dmId => {
@@ -974,10 +1012,10 @@
         
         // Listener for the user's DM metadata (which DMs they are part of)
         function listenToDMs() {
-            const dmMetadataRef = getPublicColRef('dm-metadata');
-            const q = query(dmMetadataRef, where('users', 'array-contains', window.userId));
+            const dmMetadataRef = window.getPublicColRef('dm-metadata');
+            const q = window.query(dmMetadataRef, window.where('users', 'array-contains', window.userId));
             
-            onSnapshot(q, async (snapshot) => {
+            window.onSnapshot(q, async (snapshot) => {
                 snapshot.docChanges().forEach(async (change) => {
                     const data = change.doc.data();
                     const dmId = change.doc.id;
@@ -988,7 +1026,7 @@
                         
                         let otherProfile = profileCache[otherUserId];
                         if (!otherProfile) {
-                            const profileSnap = await getDoc(getProfileDocRef(otherUserId));
+                            const profileSnap = await window.getDoc(window.getProfileDocRef(otherUserId));
                             if (profileSnap.exists()) {
                                 otherProfile = profileSnap.data();
                                 profileCache[otherUserId] = otherProfile;
@@ -1009,6 +1047,7 @@
                 updateChannelListUI();
                 // If a newly created DM is the current channel, refresh the header
                 if (dmChannels[currentChannelId] && currentChannelType === 'dm') {
+                    // Re-listen to refresh header/input placeholder if needed
                     listenToChannel(currentChannelId, currentChannelType);
                 }
             });
@@ -1016,7 +1055,7 @@
 
         // --- CORE APPLICATION FLOW ---
         
-        function selectChannel(channelId, channelType) {
+        window.selectChannel = function(channelId, channelType) {
             if (channelId === currentChannelId) return;
             
             document.querySelectorAll('.channel-item').forEach(item => {
@@ -1057,12 +1096,12 @@
             }
 
             try {
-                const profileRef = getProfileDocRef(window.userId);
+                const profileRef = window.getProfileDocRef(window.userId);
                 
-                await updateDoc(profileRef, {
+                await window.updateDoc(profileRef, {
                     name: newName,
                     avatar: getInitials(newName),
-                    lastUsernameChange: serverTimestamp()
+                    lastUsernameChange: window.serverTimestamp()
                 });
 
                 myProfile.name = newName;
@@ -1091,22 +1130,24 @@
                 return;
             }
             
-            const dmId = getDMChannelId(recipientId);
+            const dmId = window.getDMChannelId(recipientId);
             
             try {
-                const recipientProfileSnap = await getDoc(getProfileDocRef(recipientId));
+                // 1. Check if recipient profile exists
+                const recipientProfileSnap = await window.getDoc(window.getProfileDocRef(recipientId));
                 if (!recipientProfileSnap.exists()) {
                     dmError.textContent = "Error: Recipient User ID not found. They may need to log in once to create a profile.";
                     return;
                 }
                 
-                const dmMetadataRef = doc(getPublicColRef('dm-metadata'), dmId);
-                await setDoc(dmMetadataRef, {
+                // 2. Create/Merge DM metadata document
+                const dmMetadataRef = window.doc(window.getPublicColRef('dm-metadata'), dmId);
+                await window.setDoc(dmMetadataRef, {
                     users: [window.userId, recipientId],
-                    // A proper app would update lastMessageTimestamp here, but for now we just create the channel
                 }, { merge: true });
 
                 closeDMModal();
+                // 3. Select the newly created DM channel
                 selectChannel(dmId, 'dm');
                 
             } catch (error) {
@@ -1124,18 +1165,18 @@
             try {
                 let messagesColRef;
                 if (currentChannelType === 'group') {
-                    messagesColRef = getPublicColRef('general-chat-messages');
+                    messagesColRef = window.getPublicColRef('general-chat-messages');
                 } else if (currentChannelType === 'dm') {
-                    messagesColRef = getPublicColRef('dm-messages');
+                    messagesColRef = window.getPublicColRef('dm-messages');
                 } else {
                     return;
                 }
                 
-                await addDoc(messagesColRef, {
+                await window.addDoc(messagesColRef, {
                     channelId: currentChannelId,
                     senderId: window.userId,
                     text: text.substring(0, 2000),
-                    timestamp: serverTimestamp()
+                    timestamp: window.serverTimestamp()
                 });
 
                 messageInput.value = '';
@@ -1144,13 +1185,12 @@
             }
         });
         
-        initApp();
-        
+        // Attach click handler for the general channel manually since it's hardcoded HTML
         document.querySelector('.channel-item[data-channel-id="general"]').onclick = () => selectChannel('general', 'group');
+        
+        initApp();
 
     </script>
-    
-    <script id="main-script" type="text/plain"></script>
     
 </body>
 </html>
