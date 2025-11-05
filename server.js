@@ -22,3 +22,16 @@ const server = http.createServer((req, res) => {
         res.writeHead(404);
         res.end("Not found");
       } else {
+        res.writeHead(200);
+        res.end(data);
+      }
+    });
+  }
+});
+
+// Use a common port or environment variable for hosting
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
