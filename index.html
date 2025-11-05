@@ -1,721 +1,1156 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Chat App</title>
-  <script>
-    (function() {
-      const theme = localStorage.getItem('theme');
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark-mode');
-      }
-    })();
-  </script>
-  <style>
-    /* ========================================
-     CSS Variables (Theme)
-     ========================================
-    */
-    :root {
-      --font-family: Arial, sans-serif;
-      --bg-primary: #f2f2f2;
-      --bg-secondary: #ffffff;
-      --bg-tertiary: #eeeeee;
-      --text-primary: #1a1a1a;
-      --text-secondary: #666666;
-      --border-color: #ccc;
-      --accent-color: #007bff;
-      
-      /* Bubbles */
-      --bubble-mine-bg: #007bff;
-      --bubble-mine-text: #ffffff;
-      --bubble-theirs-bg: #e6ffec;
-      --bubble-theirs-border: #d4e7d7;
-      --bubble-theirs-text: #333;
-      --bubble-theirs-name: #28a745;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Clone Chat</title>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            setDoc, 
+            updateDoc, 
+            onSnapshot, 
+            collection, 
+            query, 
+            where, 
+            addDoc, 
+            serverTimestamp,
+            getDoc,
+            Timestamp,
+            getDocs
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // =========================================================================
+        // 🔑 🔑 🔑 PASTE YOUR FIREBASE CONFIG HERE 🔑 🔑 🔑
+        // Ensure the entire object is wrapped in single quotes (')
+        const FIREBASE_CONFIG_JSON = '{"apiKey": "AIzaSyD7n6A1XYZT6wKfIIpBkliDvdyaURbtmVk", "authDomain": "chat-aaa96.firebaseapp.com", "projectId": "chat-aaa96", "storageBucket": "chat-aaa96.firebasestorage.app", "messagingSenderId": "613089876723", "appId": "1:613089876723:web:52192b3e2d692190a9b586", "measurementId": "G-DD3QNTFSS7"}';
+        // =========================================================================
+        
+        const appId = "discord-clone-chat-app"; // Fixed application ID
+        let firebaseConfig = {};
+        try {
+             firebaseConfig = JSON.parse(FIREBASE_CONFIG_JSON);
+        } catch(e) {
+             console.error("Failed to parse Firebase configuration JSON:", e);
+        }
 
-    /* ========================================
-     DARK MODE THEME
-     ========================================
-    */
-    html.dark-mode {
-      --bg-primary: #121212;
-      --bg-secondary: #1e1e1e;
-      --bg-tertiary: #2a2a2a;
-      --text-primary: #e0e0e0;
-      --text-secondary: #a0a0a0;
-      --border-color: #444;
-      
-      /* Bubbles */
-      --bubble-mine-bg: #375a9a;
-      --bubble-theirs-bg: #263c2b;
-      --bubble-theirs-border: #304e37;
-      --bubble-theirs-text: #d0d0d0;
-      --bubble-theirs-name: #36c25e;
-    }
-    
-    /* ========================================
-     Core Layout & Theme Application
-     ========================================
-    */
-    body, html {
-      height: 100%;
-      overflow: hidden;
-    }
-    
-    body {
-      font-family: var(--font-family);
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      transition: background 0.2s, color 0.2s;
-    }
+        if (Object.keys(firebaseConfig).length === 0 || firebaseConfig.apiKey.includes('YOUR_API_KEY')) {
+            console.error("Firebase config is missing or invalid. Database features will not work.");
+            document.addEventListener('DOMContentLoaded', () => {
+                 document.getElementById('loading').innerHTML = '<div class="modal-content" style="text-align: center;"><h2 style="color:red;">Configuration Error</h2><p>Please update the <code>FIREBASE_CONFIG_JSON</code> string in the <code>index.html</code> file with your actual Firebase project configuration.</p></div>';
+            });
+            return; 
+        }
 
-    #header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 10px 15px;
-        background: var(--bg-secondary);
-        border-bottom: 1px solid var(--border-color);
-        flex-shrink: 0;
-    }
-    
-    #header h1 {
-        margin: 0;
-        font-size: 1.2em;
-    }
-    
-    #themeToggle {
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        padding: 8px 12px;
-        cursor: pointer;
-        font-size: 16px;
-    }
-    #themeToggle:hover {
-        opacity: 0.8;
-    }
-    
-    #chat {
-      flex-grow: 1;
-      padding: 15px;
-      overflow-y: scroll;
-      background: var(--bg-secondary);
-    }
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        let userId = null; // Current authenticated user's ID
+        
+        // Expose Firebase functions and utilities globally for use in <script> below
+        window.db = db;
+        window.auth = auth;
+        window.Timestamp = Timestamp;
+        window.serverTimestamp = serverTimestamp;
+        window.getDoc = getDoc;
+        window.setDoc = setDoc;
+        window.updateDoc = updateDoc;
+        window.onSnapshot = onSnapshot;
+        window.query = query;
+        window.where = where;
+        window.addDoc = addDoc;
+        window.getDocs = getDocs;
 
-    #input-container {
-      flex-shrink: 0;
-      background: var(--bg-secondary);
-      border-top: 1px solid var(--border-color);
-      padding: 10px;
-    }
+        // --- Firestore Path Helpers ---
+        window.getPublicColRef = (collectionName) => collection(db, `artifacts/${appId}/public/data/${collectionName}`);
+        window.getProfileDocRef = (uid) => doc(db, `artifacts/${appId}/public/data/profiles`, uid);
+        
+        window.getDMChannelId = (otherUserId) => {
+            const users = [userId, otherUserId].sort();
+            return users.join('_');
+        };
 
-    #messageInput {
-      flex-grow: 1;
-      padding: 10px;
-      font-size: 16px;
-      box-sizing: border-box;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      background: var(--bg-tertiary);
-      color: var(--text-primary);
-    }
-
-    #input-controls {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-    }
-
-    #typingIndicator {
-        font-style: italic;
-        color: var(--text-secondary);
-        padding: 5px 15px 0;
-        min-height: 20px;
-        font-size: 14px;
-        background: var(--bg-secondary);
-    }
+        // --- AUTHENTICATION AND INITIALIZATION ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+            } else {
+                try {
+                    await signInAnonymously(auth);
+                } catch(error) {
+                    console.error("Auth initialization failed:", error);
+                }
+                return; 
+            }
+            
+            if (userId) {
+                window.userId = userId;
+                // Execute the main application logic
+                const scriptElement = document.createElement('script');
+                scriptElement.id = "main-script-logic";
+                scriptElement.textContent = document.getElementById('main-script').textContent;
+                document.body.appendChild(scriptElement);
+            }
+        });
+    </script>
     
-    .button-label {
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-        padding: 10px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 14px;
-        text-align: center;
-        width: 60px;
-        flex-shrink: 0;
-        border: 1px solid var(--border-color);
-    }
-    .button-label:hover {
-        opacity: 0.8;
-    }
-    #fileInput {
-        display: none;
-    }
-    
-    /* ========================================
-     Message & Media Styles (Uniform Sizing)
-     ========================================
-    */
-    .message-row {
-      display: flex;
-      margin-bottom: 15px;
-    }
+    <style>
+        :root {
+            /* Discord Colors (Dark Theme) */
+            --bg-primary: #36393f; /* Chat background */
+            --bg-secondary: #2f3136; /* Channel list / Input bar */
+            --bg-tertiary: #202225; /* Server list */
+            --text-primary: #dcddde;
+            --text-secondary: #72767d; /* Muted text */
+            --accent-blue: #5865f2; /* Primary action/highlight */
+            --status-green: #3ba55d;
+            --status-red: #ed4245;
+            --border-color: #1e1f22;
+            --hover-light: #4f545c;
+        }
 
-    .message-content {
-      padding: 8px 12px;
-      border-radius: 18px;
-      max-width: 70%;
-      word-wrap: break-word;
-    }
-    
-    /* UNIFORM MEDIA CONTAINER STYLING */
-    .media-container {
-        width: 100%;
-        max-width: 300px; /* Constrain max width for chat window */
-        height: 200px;     /* Fixed height for uniform look */
-        border-radius: 8px;
-        overflow: hidden;
-        margin-top: 4px;
-        background: var(--bg-tertiary);
-    }
-    
-    .media-container img, .media-container video {
-        width: 100%;
-        height: 100%;
-        object-fit: cover; /* Fill the container, cropping if necessary */
-        display: block;
-    }
+        /* Base Reset and Layout */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
 
-    .message-info {
-      font-size: 12px;
-      margin-bottom: 2px;
-      font-weight: bold;
-    }
+        #app-container {
+            display: flex;
+            height: 100vh;
+        }
 
-    /* Message Sent by YOU (client) */
-    .message-row.mine {
-      justify-content: flex-end;
-    }
-    .message-row.mine .message-info {
-        text-align: right;
-        color: var(--accent-color);
-    }
-    .message-row.mine .message-content {
-      background: var(--bubble-mine-bg);
-      color: var(--bubble-mine-text);
-      border-bottom-right-radius: 4px;
-    }
-    .message-row.mine .message-content a {
-        color: #fff;
-    }
+        /* 1. Server List (Left-most column - Fixed for this single-server app) */
+        #server-list {
+            width: 72px;
+            background-color: var(--bg-tertiary);
+            flex-shrink: 0;
+            padding: 10px 0;
+            overflow-y: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
 
-    /* Message Sent by OTHERS */
-    .message-row.theirs {
-      justify-content: flex-start;
-    }
-    .message-row.theirs .message-info {
-        text-align: left;
-        color: var(--bubble-theirs-name);
-    }
-    .message-row.theirs .message-content {
-      background: var(--bubble-theirs-bg);
-      color: var(--bubble-theirs-text);
-      border: 1px solid var(--bubble-theirs-border);
-      border-bottom-left-radius: 4px;
-    }
-    .message-row.theirs .message-content a {
-        color: var(--accent-color);
-    }
+        .server-icon {
+            width: 50px;
+            height: 50px;
+            background-color: var(--accent-blue);
+            border-radius: 50%;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+            color: white;
+            cursor: default; 
+            transition: border-radius 0.2s;
+        }
+        
+        .server-icon-seperator {
+            height: 2px;
+            width: 32px;
+            background-color: var(--text-secondary);
+            margin: 10px auto;
+            border-radius: 1px;
+        }
 
-    /* System Messages */
-    .message-row.system {
-        justify-content: center;
-        text-align: center;
-    }
-    .message-row.system .message-content {
-      background: none;
-      font-style: italic;
-      color: var(--text-secondary);
-      max-width: 100%;
-      padding: 0;
-    }
-    
-    /* ========================================
-     Modals (Name & Tenor)
-     ========================================
-    */
-    .modal-overlay {
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.8);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 100;
-    }
-    .modal-content {
-        background: var(--bg-secondary);
-        padding: 30px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        color: var(--text-primary);
-        width: 90%;
-        max-width: 500px;
-    }
-    .modal-content h2 {
-        margin-top: 0;
-        font-size: 1.5em;
-    }
-    .modal-input {
-        padding: 10px;
-        margin: 15px 0;
-        width: calc(100% - 22px);
-        border: 1px solid var(--border-color);
-        border-radius: 4px;
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-    }
-    .modal-button {
-        padding: 10px 20px;
-        background: var(--accent-color);
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-    
-    /* Tenor Modal Specifics */
-    #tenorModal .modal-content {
-        max-height: 80vh;
-        display: flex;
-        flex-direction: column;
-    }
-    #tenorSearchInput {
-        width: calc(100% - 22px);
-        margin-bottom: 15px;
-    }
-    #tenorResultsGrid {
-        flex-grow: 1;
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-        gap: 5px;
-        overflow-y: scroll;
-        border: 1px solid var(--border-color);
-        border-radius: 4px;
-        padding: 5px;
-        background: var(--bg-tertiary);
-        margin-bottom: 15px;
-    }
-    #tenorResultsGrid img {
-        width: 100%;
-        height: 100px;
-        object-fit: cover;
-        cursor: pointer;
-        border-radius: 4px;
-    }
-    
-  </style>
+        /* 2. Channel/DM List (Second column) */
+        #channel-list {
+            width: 240px;
+            background-color: var(--bg-secondary);
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #channel-header {
+            height: 48px;
+            padding: 0 15px;
+            display: flex;
+            align-items: center;
+            font-weight: bold;
+            font-size: 16px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        #dm-channels-container {
+            flex-grow: 1;
+            padding: 8px 0;
+            overflow-y: auto;
+        }
+
+        .channel-category {
+            text-transform: uppercase;
+            font-size: 12px;
+            font-weight: bold;
+            color: var(--text-secondary);
+            padding: 10px 10px 5px 15px;
+        }
+        
+        .channel-category.dm {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .channel-category.dm .add-dm-btn {
+            font-size: 18px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: color 0.2s;
+        }
+        .channel-category.dm .add-dm-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .channel-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 15px;
+            margin: 1px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: background-color 0.1s, color 0.1s;
+        }
+
+        .channel-item:hover {
+            background-color: var(--hover-light);
+            color: var(--text-primary);
+        }
+
+        .channel-item.active {
+            background-color: var(--hover-light);
+            color: white;
+        }
+
+        .channel-icon {
+            margin-right: 8px;
+            font-size: 16px;
+            width: 16px;
+            height: 16px;
+            text-align: center;
+            line-height: 16px;
+        }
+        .channel-icon.dm-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: var(--accent-blue);
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            line-height: 24px;
+            margin-right: 10px;
+        }
+
+        /* User Panel (Bottom of Channel List) */
+        #user-panel {
+            background-color: var(--border-color);
+            height: 52px;
+            flex-shrink: 0;
+            padding: 0 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--text-primary);
+        }
+
+        #user-profile-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .profile-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: var(--accent-blue);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            margin-right: 8px;
+            cursor: pointer;
+        }
+        
+        #username-display {
+            font-size: 14px;
+            font-weight: bold;
+            line-height: 1;
+            cursor: default;
+        }
+        #user-id-display {
+            font-size: 10px;
+            color: var(--text-secondary);
+            line-height: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 100px;
+        }
+
+        #settings-button {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+            transition: color 0.1s;
+        }
+        #settings-button:hover {
+            color: var(--text-primary);
+        }
+
+        /* 3. Chat Area (Main Content) */
+        #chat-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #chat-header {
+            height: 48px;
+            padding: 0 15px;
+            display: flex;
+            align-items: center;
+            font-size: 16px;
+            font-weight: bold;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        #chat-header-icon {
+            color: var(--text-secondary);
+            margin-right: 8px;
+            font-size: 20px;
+        }
+
+        #message-container {
+            flex-grow: 1;
+            padding: 0 20px 0 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column-reverse; /* Start from bottom */
+        }
+        
+        #chat-scroller {
+            display: flex;
+            flex-direction: column-reverse;
+        }
+
+        /* Message Styles */
+        .chat-message {
+            display: flex;
+            padding: 4px 0;
+            line-height: 1.4;
+            transition: background-color 0.1s;
+        }
+        .chat-message:hover {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--accent-blue);
+            margin-right: 16px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .message-content-wrapper {
+            flex-grow: 1;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: baseline;
+            margin-bottom: 2px;
+        }
+
+        .message-username {
+            font-weight: bold;
+            color: #2ecc71; /* Example user color */
+            margin-right: 8px;
+            font-size: 15px;
+        }
+
+        .message-timestamp {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .message-text {
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            font-size: 15px;
+        }
+        
+        .message-text a {
+            color: #00b0f4;
+            text-decoration: none;
+        }
+        .message-text a:hover {
+            text-decoration: underline;
+        }
+
+        /* Input Area */
+        #input-area {
+            flex-shrink: 0;
+            padding: 20px;
+        }
+
+        #message-input-form {
+            display: flex;
+            background-color: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 0 16px;
+        }
+
+        #message-input {
+            flex-grow: 1;
+            background: none;
+            border: none;
+            outline: none;
+            padding: 10px 0;
+            font-size: 16px;
+            color: var(--text-primary);
+        }
+        #send-button {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        /* --- Modals (Used for Profile/DM Creation) --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: var(--bg-primary);
+            padding: 30px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            color: var(--text-primary);
+        }
+
+        .modal-content h2 {
+            color: var(--accent-blue);
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        .modal-button-group {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .modal-button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+        .modal-button.primary {
+            background-color: var(--accent-blue);
+            color: white;
+        }
+        .modal-button.primary:disabled {
+            background-color: var(--text-secondary);
+            cursor: not-allowed;
+        }
+
+        .modal-button.secondary {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+        .modal-button.secondary:hover {
+            background-color: var(--hover-light);
+        }
+        
+        .modal-alert {
+            color: var(--status-red);
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        
+        .info-box {
+            background-color: var(--hover-light);
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+        
+        .info-box span {
+            font-weight: bold;
+            color: var(--accent-blue);
+        }
+
+    </style>
 </head>
 <body>
-  <div id="header">
-      <h1>Class Chat</h1>
-      <button id="themeToggle">🌙 Dark</button>
-  </div>
 
-  <div id="namePrompt" class="modal-overlay">
-    <div class="modal-content">
-      <h2 style="margin-top: 0;">Choose a Display Name</h2>
-      <input id="nameInput" type="text" placeholder="Your Name" class="modal-input" maxlength="20" />
-      <button id="nameSubmit" class="modal-button">Join Chat</button>
+    <div id="loading" class="modal-overlay">
+        <div class="modal-content" style="text-align: center;">
+            <p>Connecting to Chat Server...</p>
+            <p>Please wait while we authenticate your session.</p>
+            <p class="info-box">Your Firebase User ID: <span id="loading-uid-display">Loading...</span></p>
+        </div>
     </div>
-  </div>
-  <div id="tenorModal" class="modal-overlay" style="display:none;">
-    <div class="modal-content">
-      <h2>Search for a GIF</h2>
-      <input id="tenorSearchInput" type="text" placeholder="Search Tenor (e.g., 'cat fail')" class="modal-input" />
-      <div id="tenorResultsGrid"></div>
-      <button id="tenorClose" class="modal-button" style="background: #dc3545;">Close</button>
-    </div>
-  </div>
-  <div id="chat"></div>
-  <div id="typingIndicator" style="display:none;"></div>
-  
-  <div id="input-container">
-    <div id="input-controls">
-        <input id="messageInput" type="text" placeholder="Type a message (max 500 chars)..." disabled maxlength="500"/>
-        
-        <button id="gifButton" class="button-label" style="width: 40px; font-weight: bold;">GIF</button>
-        
-        <label for="fileInput" class="button-label">🖼️/🎬</label>
-        <input type="file" id="fileInput" accept="image/gif, image/png, image/jpeg, video/mp4" />
-    </div>
-  </div>
 
-  <script>
-    const chat = document.getElementById("chat");
-    const messageInput = document.getElementById("messageInput");
-    const namePrompt = document.getElementById("namePrompt");
-    const nameInput = document.getElementById("nameInput");
-    const nameSubmit = document.getElementById("nameSubmit");
-    const fileInput = document.getElementById("fileInput");
-    const typingIndicator = document.getElementById("typingIndicator");
-    const themeToggle = document.getElementById("themeToggle");
-    const gifButton = document.getElementById("gifButton");
-    const tenorModal = document.getElementById("tenorModal");
-    const tenorSearchInput = document.getElementById("tenorSearchInput");
-    const tenorResultsGrid = document.getElementById("tenorResultsGrid");
-    const tenorClose = document.getElementById("tenorClose");
-    
-    // YOUR TENOR API KEY
-    const TENOR_API_KEY = "AIzaSyBmp9odqbiQhHC2I6KbhiScnsL368pzJCk";
-    
-    let userName = "Anonymous";
-    let clientId = Math.random().toString(36).substring(2, 9);
-    
-    let typingTimeout;
-    const typingUsers = new Set();
-    
-    // --- Theme Toggle Logic ---
-    themeToggle.addEventListener('click', () => {
-        const isDarkMode = document.documentElement.classList.toggle('dark-mode');
-        localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-        themeToggle.textContent = isDarkMode ? '☀️ Light' : '🌙 Dark';
-    });
-    
-    // Set initial toggle text
-    document.addEventListener('DOMContentLoaded', () => {
-        const isDarkMode = document.documentElement.classList.contains('dark-mode');
-        themeToggle.textContent = isDarkMode ? '☀️ Light' : '🌙 Dark';
-    });
-    
-    // --- Message Rendering Function ---
-    function renderMessage(data) {
-      if (data.type === "typing") {
-          updateTypingIndicator(data);
-          return;
-      }
-      
-      const row = document.createElement("div");
-      row.classList.add("message-row");
+    <div id="app-container" style="display:none;">
 
-      const content = document.createElement("div");
-      content.classList.add("message-content");
-      
-      let senderName = data.sender === "system" ? "System" : (data.senderName || "Unknown");
-      
-      // Determine message class
-      if (data.clientId && data.clientId === clientId) {
-          row.classList.add("mine");
-      } else if (data.sender !== "system") {
-          row.classList.add("theirs");
-      } else {
-          row.classList.add("system");
-      }
+        <div id="server-list">
+            <div class="server-icon active">C</div>
+            <div class="server-icon-seperator"></div>
+            <div class="server-icon" style="background-color: #f04747; cursor: pointer;" onclick="showDMModal()">DM</div>
+        </div>
 
-      // Append sender name above the bubble (except for system messages)
-      if (data.sender !== "system") {
-        const info = document.createElement("div");
-        info.classList.add("message-info");
-        info.textContent = senderName;
-        row.appendChild(info);
-      }
-      
-      // Handle file/media content (including Tenor GIFs)
-      if (data.fileUrl) {
-          const mediaContainer = document.createElement('div');
-          mediaContainer.classList.add('media-container');
-          
-          if (data.fileType.startsWith('image/') || data.fileType === 'image/gif') {
-              const img = document.createElement('img');
-              img.src = data.fileUrl;
-              img.alt = 'Uploaded image or GIF';
-              mediaContainer.appendChild(img);
-          } else if (data.fileType.startsWith('video/')) {
-              const video = document.createElement('video');
-              video.src = data.fileUrl;
-              video.controls = true;
-              video.loop = true;
-              video.autoplay = true; // GIFs/Videos should autoplay if possible
-              video.muted = true;
-              mediaContainer.appendChild(video);
-          }
-          content.appendChild(mediaContainer);
-      } 
-      
-      // Handle text content 
-      if (data.text && data.text.trim()) {
-          const textNode = document.createTextNode(data.text);
-          content.appendChild(textNode);
-      } else if (!data.fileUrl) {
-           return; 
-      }
-
-      // Order the elements correctly
-      if (data.sender !== "system") {
-          row.appendChild(content);
-      } else {
-          row.appendChild(content);
-      }
-      
-      chat.appendChild(row);
-      chat.scrollTop = chat.scrollHeight;
-    }
-    
-    // --- Typing Indicator Logic (Unchanged) ---
-    function updateTypingIndicator(data) {
-        if (data.isTyping) {
-            if (data.clientId !== clientId) {
-                typingUsers.add(data.senderName);
-            }
-        } else {
-            typingUsers.delete(data.senderName);
-        }
-
-        if (typingUsers.size > 0) {
-            const names = Array.from(typingUsers);
-            let indicatorText;
-            if (names.length === 1) {
-                indicatorText = `${names[0]} is typing...`;
-            } else if (names.length === 2) {
-                indicatorText = `${names[0]} and ${names[1]} are typing...`;
-            } else {
-                indicatorText = `${names[0]} and ${names.length - 1} others are typing...`;
-            }
-            typingIndicator.textContent = indicatorText;
-            typingIndicator.style.display = 'block';
-        } else {
-            typingIndicator.style.display = 'none';
-        }
-    }
-    
-    function sendTypingStatus(isTyping) {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ 
-                type: "typing", 
-                isTyping: isTyping,
-                name: userName,
-                clientId: clientId
-            }));
-        }
-    }
-    
-    // --- Tenor API Functions ---
-    let searchTimeout;
-
-    function searchTenor(query) {
-        if (!query) return;
-        
-        const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=${TENOR_API_KEY}&client_key=my_chat_app&limit=20&media_filter=tinygif,tinymp4`;
-        
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                tenorResultsGrid.innerHTML = ''; // Clear previous results
-                if (data.results && data.results.length > 0) {
-                    data.results.forEach(gif => {
-                        const media = gif.media_formats.tinygif || gif.media_formats.tinymp4;
-                        if (media) {
-                            const img = document.createElement('img');
-                            img.src = media.url;
-                            img.alt = gif.content_description;
-                            img.dataset.url = media.url;
-                            img.dataset.type = media.url.endsWith('.mp4') ? 'video/mp4' : 'image/gif';
-                            
-                            img.addEventListener('click', (e) => {
-                                // Send selected GIF
-                                sendFileMessage(e.target.dataset.url, e.target.dataset.type);
-                                tenorModal.style.display = 'none';
-                            });
-                            tenorResultsGrid.appendChild(img);
-                        }
-                    });
-                } else {
-                    tenorResultsGrid.textContent = 'No GIFs found.';
-                }
-            })
-            .catch(error => {
-                console.error('Tenor API Error:', error);
-                tenorResultsGrid.textContent = 'Error fetching GIFs.';
-            });
-    }
-
-    // --- File/Media Sending Function (Reusable for Uploads and Tenor) ---
-    function sendFileMessage(url, type) {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            // Clear typing status
-            sendTypingStatus(false);
-            clearTimeout(typingTimeout);
-            messageInput.isTyping = false;
+        <div id="channel-list">
             
-            // Send a structured message with file URL
-            socket.send(JSON.stringify({ 
-                type: "file", 
-                fileUrl: url, // Server expects fileUrl for direct media link
-                fileType: type,
-                name: userName, 
-                clientId: clientId 
-            }));
-        } else {
-            alert("Cannot send file/GIF. Not connected to chat.");
-        }
-    }
+            <div id="channel-header">
+                Chat Application
+            </div>
 
-    // --- WebSocket Setup (Unchanged) ---
-    const protocol = location.protocol === "https:" ? "wss" : "ws";
-    let socket;
+            <div id="dm-channels-container">
+                
+                <div class="channel-category">Channels</div>
+                <div class="channel-item active" data-channel-id="general" data-type="group">
+                    <span class="channel-icon">#</span>
+                    <span>general-chat</span>
+                </div>
+                
+                <div class="channel-category dm">
+                    Direct Messages
+                    <span class="add-dm-btn" title="Start a new DM" onclick="showDMModal()">+</span>
+                </div>
+                <div id="dm-list">
+                    </div>
+            </div>
 
-    function initializeSocket(name) {
-        const host = location.host || location.hostname; 
-        const wsUrl = `${protocol}://${host}`;
-        
-        socket = new WebSocket(wsUrl);
-        
-        socket.addEventListener("open", () => {
-            socket.send(JSON.stringify({ type: "init", name: name, clientId: clientId }));
-            messageInput.disabled = false;
-            messageInput.placeholder = "Type a message (max 500 chars)...";
-        });
+            <div id="user-panel">
+                <div id="user-profile-info">
+                    <div id="my-avatar" class="profile-avatar" onclick="showProfileModal()">?</div>
+                    <div>
+                        <div id="username-display">Loading...</div>
+                        <div id="user-id-display">ID: Loading...</div>
+                    </div>
+                </div>
+                <button id="settings-button" onclick="showProfileModal()">⚙️</button>
+            </div>
+        </div>
 
-        socket.addEventListener("message", async (event) => {
-          let data;
-          try {
-            const messageData = event.data instanceof Blob ? await event.data.text() : event.data;
-            data = JSON.parse(messageData);
-          } catch (err) {
-            console.error("Failed to parse message:", err);
-            return;
-          }
+        <div id="chat-area">
+            <div id="chat-header">
+                <span id="chat-header-icon">#</span>
+                <span id="chat-header-name">general-chat</span>
+            </div>
 
-          renderMessage(data); 
-        });
+            <div id="message-container">
+                <div id="chat-scroller"></div>
+            </div>
 
-        socket.addEventListener("close", () => {
-             messageInput.disabled = true;
-             messageInput.placeholder = "Disconnected. Retrying...";
-             window.setTimeout(() => initializeSocket(name), 3000);
-        });
-        
-        socket.addEventListener("error", (err) => {
-            console.error("WebSocket Error:", err);
-            socket.close();
-        });
-    }
+            <div id="input-area">
+                <form id="message-input-form">
+                    <input id="message-input" type="text" placeholder="Message #general-chat" maxlength="2000" disabled>
+                    <button id="send-button" type="submit" disabled>▶</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div id="profile-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2>Your Profile</h2>
+            
+            <div class="info-box">
+                Your Unique ID: <span id="modal-uid"></span>
+            </div>
+            
+            <label for="new-username-input">Display Name (Max 16 chars):</label>
+            <input id="new-username-input" type="text" class="modal-input" maxlength="16" placeholder="Enter new username">
+            
+            <div id="cooldown-status" class="modal-alert"></div>
 
-    // --- Event Listeners ---
-    nameSubmit.addEventListener("click", () => {
-        const name = nameInput.value.trim();
-        if (name) {
-            userName = name;
-            namePrompt.style.display = "none";
-            initializeSocket(userName);
-        }
-    });
+            <div class="modal-button-group">
+                <button class="modal-button secondary" onclick="closeProfileModal()">Cancel</button>
+                <button id="save-profile-btn" class="modal-button primary" disabled>Save Changes</button>
+            </div>
+        </div>
+    </div>
     
-    nameInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-            nameSubmit.click();
-        }
-    });
+    <div id="dm-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2>Start a Direct Message</h2>
+            
+            <div class="info-box">
+                To start a DM, you need the recipient's **Firebase User ID** (e.g., `4q30j1a`). Find your ID in the bottom-left corner!
+            </div>
+            
+            <label for="dm-recipient-input">Recipient's User ID:</label>
+            <input id="dm-recipient-input" type="text" class="modal-input" placeholder="Paste user ID here">
+            
+            <div id="dm-error" class="modal-alert"></div>
+
+            <div class="modal-button-group">
+                <button class="modal-button secondary" onclick="closeDMModal()">Cancel</button>
+                <button id="start-dm-btn" class="modal-button primary">Start DM</button>
+            </div>
+        </div>
+    </div>
     
-    // Typing listener
-    messageInput.addEventListener("input", () => {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            clearTimeout(typingTimeout);
-            if (!messageInput.isTyping) {
-                sendTypingStatus(true);
-                messageInput.isTyping = true;
+    <script id="main-script" type="text/plain">
+        
+        // --- CONSTANTS ---
+        const COOLDOWN_DAYS = 7;
+        const MS_PER_DAY = 24 * 60 * 60 * 1000;
+        const COOLDOWN_MS = COOLDOWN_DAYS * MS_PER_DAY;
+        
+        // --- GLOBAL STATE ---
+        let currentChannelId = 'general';
+        let currentChannelType = 'group'; // 'group' or 'dm'
+        let unsubscribe = null; // Holds the Firestore unsubscribe function
+        let myProfile = {};
+        const profileCache = {}; // Cache for other users' profiles (UID -> {name, avatar})
+        const dmChannels = {}; // Cache for DM channel objects (DM_ID -> {otherUserId, otherUserName})
+
+        // --- DOM Elements ---
+        const loadingScreen = document.getElementById('loading');
+        const appContainer = document.getElementById('app-container');
+        const chatScroller = document.getElementById('chat-scroller');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const messageForm = document.getElementById('message-input-form');
+        const dmList = document.getElementById('dm-list');
+        const loadingUidDisplay = document.getElementById('loading-uid-display');
+        
+        // Profile Modal elements
+        const profileModal = document.getElementById('profile-modal');
+        const newUsernameInput = document.getElementById('new-username-input');
+        const saveProfileBtn = document.getElementById('save-profile-btn');
+        const cooldownStatus = document.getElementById('cooldown-status');
+        
+        // DM Modal elements
+        const dmModal = document.getElementById('dm-modal');
+        const dmRecipientInput = document.getElementById('dm-recipient-input');
+        const startDmBtn = document.getElementById('start-dm-btn');
+        const dmError = document.getElementById('dm-error');
+        
+        // --- PROFILE & COOLDOWN LOGIC ---
+
+        function getInitials(name) {
+            if (!name) return '?';
+            const parts = name.trim().split(/\s+/).filter(Boolean); // Split by whitespace and remove empty strings
+            if (parts.length > 1) {
+                return (parts[0][0] + parts[1][0]).toUpperCase();
             }
-            typingTimeout = setTimeout(() => {
-                sendTypingStatus(false);
-                messageInput.isTyping = false;
-            }, 1500);
-        }
-    });
-    
-    // Message send listener (Text)
-    messageInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && messageInput.value.trim() !== "" && socket.readyState === WebSocket.OPEN) {
-        const text = messageInput.value.trim().substring(0, 500); 
-        
-        sendTypingStatus(false);
-        clearTimeout(typingTimeout);
-        messageInput.isTyping = false;
-        
-        socket.send(JSON.stringify({ type: "chat", text: text, name: userName, clientId: clientId }));
-        messageInput.value = "";
-      }
-    });
-    
-    // File upload listener (Uses FileReader and Base64 for compatibility)
-    fileInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const maxFileSize = 10 * 1024 * 1024; // 10MB limit
-        const allowedMimes = ['image/gif', 'image/png', 'image/jpeg', 'video/mp4'];
-        
-        if (file.size > maxFileSize) {
-            alert("File size exceeds 10MB limit.");
-            fileInput.value = '';
-            return;
-        }
-        if (!allowedMimes.includes(file.type)) {
-             alert("Unsupported file type. Only GIF, PNG, JPG, and MP4 are allowed.");
-             fileInput.value = '';
-             return;
+            return parts[0][0].toUpperCase();
         }
 
-        // Use FileReader to convert file to Data URL (Base64)
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            // Send a structured file message using the Data URL as the source
-            sendFileMessage(event.target.result, file.type);
-            fileInput.value = ''; // Clear input
-        };
-        reader.readAsDataURL(file);
-    });
-    
-    // --- Tenor Modal Listeners ---
-    gifButton.addEventListener('click', () => {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            tenorModal.style.display = 'flex';
-            tenorResultsGrid.innerHTML = '';
-            tenorSearchInput.value = '';
-            // Load initial trending GIFs
-            searchTenor('trending');
-            tenorSearchInput.focus();
-        } else {
-            alert("You must be connected to the chat to send GIFs.");
-        }
-    });
+        async function loadMyProfile() {
+            const profileRef = getProfileDocRef(window.userId);
+            const docSnap = await getDoc(profileRef);
 
-    tenorClose.addEventListener('click', () => {
-        tenorModal.style.display = 'none';
-    });
-
-    tenorSearchInput.addEventListener('input', () => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            const query = tenorSearchInput.value.trim();
-            if (query) {
-                searchTenor(query);
+            if (docSnap.exists()) {
+                myProfile = docSnap.data();
             } else {
-                searchTenor('trending'); // Default back to trending
+                // Initial profile creation
+                const defaultName = `User ${Math.random().toString(36).substring(2, 6)}`;
+                myProfile = {
+                    name: defaultName,
+                    lastUsernameChange: null,
+                    avatar: getInitials(defaultName)
+                };
+                await setDoc(profileRef, myProfile);
             }
-        }, 500); // Debounce search
-    });
+            
+            // Update UI elements
+            document.getElementById('my-avatar').textContent = myProfile.avatar;
+            document.getElementById('username-display').textContent = myProfile.name;
+            document.getElementById('user-id-display').textContent = 'ID: ' + window.userId;
+            loadingUidDisplay.textContent = window.userId;
+            
+            // Set initial placeholder for input
+            document.getElementById('message-input').placeholder = `Message #${currentChannelId}`;
+        }
+        
+        // Checks cooldown and updates profile modal UI
+        function checkUsernameCooldown(lastChange) {
+            saveProfileBtn.disabled = true;
+            
+            if (!lastChange) {
+                cooldownStatus.textContent = "You can change your name immediately.";
+                saveProfileBtn.disabled = false;
+                return;
+            }
+
+            const lastChangeMs = lastChange.toMillis();
+            const timeSinceChange = Date.now() - lastChangeMs;
+            
+            if (timeSinceChange >= COOLDOWN_MS) {
+                cooldownStatus.textContent = "You are eligible to change your name now.";
+                saveProfileBtn.disabled = false;
+            } else {
+                const timeRemainingMs = COOLDOWN_MS - timeSinceChange;
+                const days = Math.floor(timeRemainingMs / MS_PER_DAY);
+                const hours = Math.ceil((timeRemainingMs % MS_PER_DAY) / (60 * 60 * 1000));
+                
+                cooldownStatus.textContent = 
+                    `You must wait ${days}d ${hours}h before changing your name again.`;
+            }
+        }
+        
+        // --- MODAL FUNCTIONS ---
+        
+        function showProfileModal() {
+            if (!myProfile.name) return;
+            
+            document.getElementById('modal-uid').textContent = window.userId;
+            newUsernameInput.value = myProfile.name;
+            
+            checkUsernameCooldown(myProfile.lastUsernameChange);
+            
+            profileModal.style.display = 'flex';
+        }
+        
+        function closeProfileModal() {
+            profileModal.style.display = 'none';
+            cooldownStatus.textContent = '';
+        }
+        
+        function showDMModal() {
+            dmRecipientInput.value = '';
+            dmError.textContent = '';
+            dmModal.style.display = 'flex';
+        }
+        
+        function closeDMModal() {
+            dmModal.style.display = 'none';
+        }
+
+        // --- CHAT MESSAGE LOGIC ---
+        
+        /**
+         * Renders a single message element, ensuring messages are sorted correctly
+         * by their timestamp in the reversed scroller.
+         */
+        function renderMessage(msg, senderName) {
+            const chatMessage = document.createElement('div');
+            chatMessage.className = 'chat-message';
+            chatMessage.dataset.timestamp = msg.timestamp ? msg.timestamp.toMillis() : Date.now();
+            
+            // Avatar
+            const avatarDiv = document.createElement('div');
+            avatarDiv.className = 'message-avatar';
+            avatarDiv.textContent = getInitials(senderName);
+            chatMessage.appendChild(avatarDiv);
+            
+            // Content Wrapper
+            const contentWrapper = document.createElement('div');
+            contentWrapper.className = 'message-content-wrapper';
+            
+            // Header
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'message-header';
+            
+            const usernameSpan = document.createElement('span');
+            usernameSpan.className = 'message-username';
+            usernameSpan.textContent = senderName;
+            headerDiv.appendChild(usernameSpan);
+            
+            const timestampSpan = document.createElement('span');
+            timestampSpan.className = 'message-timestamp';
+            if (msg.timestamp && msg.timestamp.toDate) {
+                const date = msg.timestamp.toDate();
+                timestampSpan.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+            headerDiv.appendChild(timestampSpan);
+            
+            contentWrapper.appendChild(headerDiv);
+            
+            // Text Content
+            const textDiv = document.createElement('div');
+            textDiv.className = 'message-text';
+            
+            const linkRegex = /(https?:\/\/[^\s]+)/g;
+            const linkifiedText = msg.text.replace(linkRegex, (url) => 
+                `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+            );
+            textDiv.innerHTML = linkifiedText;
+            
+            contentWrapper.appendChild(textDiv);
+            chatMessage.appendChild(contentWrapper);
+            
+            // Insert the new message while maintaining the reversed order based on timestamp
+            // Since chatScroller has column-reverse, appending ensures it appears at the bottom (most recent)
+            chatScroller.appendChild(chatMessage);
+        }
+
+        /**
+         * Fetches a user's profile and renders the message using the profile name.
+         */
+        async function fetchAndRenderMessage(msg) {
+            const senderId = msg.senderId;
+            let senderName = "Unknown User";
+
+            if (senderId === window.userId) {
+                senderName = myProfile.name;
+            } else {
+                if (!profileCache[senderId]) {
+                    const profileRef = getProfileDocRef(senderId);
+                    const docSnap = await getDoc(profileRef);
+                    if (docSnap.exists()) {
+                        profileCache[senderId] = docSnap.data();
+                    } else {
+                         profileCache[senderId] = { name: senderId.substring(0, 8), avatar: '?' };
+                    }
+                }
+                senderName = profileCache[senderId].name;
+            }
+            renderMessage(msg, senderName);
+        }
+
+        /**
+         * Establishes the Firestore listener for the selected channel.
+         */
+        async function listenToChannel(channelId, channelType) {
+            if (unsubscribe) {
+                unsubscribe();
+            }
+
+            chatScroller.innerHTML = '';
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+
+            let messagesColRef;
+            let headerName = channelId;
+            let headerIcon = '#';
+
+            if (channelType === 'group' && channelId === 'general') {
+                messagesColRef = getPublicColRef('general-chat-messages');
+            } else if (channelType === 'dm') {
+                messagesColRef = getPublicColRef('dm-messages');
+                
+                const dmChannelInfo = dmChannels[channelId];
+                if (dmChannelInfo) {
+                    headerName = dmChannelInfo.otherUserName;
+                    headerIcon = getInitials(dmChannelInfo.otherUserName);
+                }
+            } else {
+                return;
+            }
+            
+            // Update Chat Header
+            document.getElementById('chat-header-name').textContent = headerName;
+            document.getElementById('chat-header-icon').textContent = headerIcon.length === 1 ? headerIcon : '';
+            messageInput.placeholder = `Message ${channelType === 'group' ? '#' : '@'}${headerName}`;
+
+            // Query the messages for the specific channel, ordered by timestamp
+            const q = query(
+                messagesColRef,
+                where('channelId', '==', channelId),
+                // We trust client to manage order with the DOM for simplicity
+            );
+
+            // Start the real-time listener (onSnapshot)
+            unsubscribe = onSnapshot(q, (snapshot) => {
+                // Process only new messages
+                snapshot.docChanges().forEach(async (change) => {
+                    if (change.type === "added") {
+                        const newMsg = change.doc.data();
+                        await fetchAndRenderMessage(newMsg);
+                    }
+                });
+
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+                messageInput.focus();
+            }, (error) => {
+                console.error("Error listening to channel:", error);
+                messageInput.placeholder = "Connection Error";
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+            });
+            
+            currentChannelId = channelId;
+            currentChannelType = channelType;
+        }
+        
+        // --- CHANNEL/DM LIST MANAGEMENT ---
+
+        function updateChannelListUI() {
+            // 1. Mark general chat active if selected
+            document.querySelectorAll('.channel-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            const activeItem = document.querySelector(`.channel-item[data-channel-id="${currentChannelId}"]`);
+            if (activeItem) {
+                activeItem.classList.add('active');
+            }
+            
+            // 2. Clear and rebuild DM list
+            dmList.innerHTML = '';
+            const sortedDmIds = Object.keys(dmChannels).sort((a, b) => {
+                // Simple string sort, could be updated to sort by last message time
+                return a.localeCompare(b);
+            });
+
+            sortedDmIds.forEach(dmId => {
+                const info = dmChannels[dmId];
+                
+                const dmItem = document.createElement('div');
+                dmItem.className = 'channel-item' + (currentChannelId === dmId ? ' active' : '');
+                dmItem.dataset.channelId = dmId;
+                dmItem.dataset.type = 'dm';
+                dmItem.onclick = () => selectChannel(dmId, 'dm');
+                
+                const avatar = document.createElement('span');
+                avatar.className = 'channel-icon dm-avatar';
+                avatar.textContent = info.otherUserAvatar;
+                dmItem.appendChild(avatar);
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = info.otherUserName;
+                dmItem.appendChild(nameSpan);
+                
+                dmList.appendChild(dmItem);
+            });
+        }
+        
+        // Listener for the user's DM metadata (which DMs they are part of)
+        function listenToDMs() {
+            const dmMetadataRef = getPublicColRef('dm-metadata');
+            const q = query(dmMetadataRef, where('users', 'array-contains', window.userId));
+            
+            onSnapshot(q, async (snapshot) => {
+                snapshot.docChanges().forEach(async (change) => {
+                    const data = change.doc.data();
+                    const dmId = change.doc.id;
+                    
+                    if (change.type === 'added' || change.type === 'modified') {
+                        const otherUserId = data.users.find(uid => uid !== window.userId);
+                        if (!otherUserId) return;
+                        
+                        let otherProfile = profileCache[otherUserId];
+                        if (!otherProfile) {
+                            const profileSnap = await getDoc(getProfileDocRef(otherUserId));
+                            if (profileSnap.exists()) {
+                                otherProfile = profileSnap.data();
+                                profileCache[otherUserId] = otherProfile;
+                            } else {
+                                otherProfile = { name: otherUserId.substring(0, 8), avatar: getInitials(otherUserId) };
+                            }
+                        }
+
+                        dmChannels[dmId] = {
+                            otherUserId: otherUserId,
+                            otherUserName: otherProfile.name,
+                            otherUserAvatar: otherProfile.avatar,
+                        };
+                    } else if (change.type === 'removed') {
+                        delete dmChannels[dmId];
+                    }
+                });
+                updateChannelListUI();
+                // If a newly created DM is the current channel, refresh the header
+                if (dmChannels[currentChannelId] && currentChannelType === 'dm') {
+                    listenToChannel(currentChannelId, currentChannelType);
+                }
+            });
+        }
+
+        // --- CORE APPLICATION FLOW ---
+        
+        function selectChannel(channelId, channelType) {
+            if (channelId === currentChannelId) return;
+            
+            document.querySelectorAll('.channel-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            const selectedItem = document.querySelector(`.channel-item[data-channel-id="${channelId}"]`);
+            if (selectedItem) {
+                selectedItem.classList.add('active');
+            }
+            
+            listenToChannel(channelId, channelType);
+        }
+
+        async function initApp() {
+            
+            await loadMyProfile();
+            
+            loadingScreen.style.display = 'none';
+            appContainer.style.display = 'flex';
+            
+            listenToDMs();
+
+            selectChannel('general', 'group');
+        }
+
+        // --- EVENT HANDLERS ---
+        
+        saveProfileBtn.addEventListener('click', async () => {
+            const newName = newUsernameInput.value.trim();
+            if (!newName || newName.length < 3 || newName === myProfile.name) {
+                closeProfileModal();
+                return;
+            }
+            
+            if (saveProfileBtn.disabled) {
+                cooldownStatus.textContent = "Error: Cooldown not met.";
+                return;
+            }
+
+            try {
+                const profileRef = getProfileDocRef(window.userId);
+                
+                await updateDoc(profileRef, {
+                    name: newName,
+                    avatar: getInitials(newName),
+                    lastUsernameChange: serverTimestamp()
+                });
+
+                myProfile.name = newName;
+                myProfile.avatar = getInitials(newName);
+                
+                document.getElementById('my-avatar').textContent = myProfile.avatar;
+                document.getElementById('username-display').textContent = myProfile.name;
+                
+                closeProfileModal();
+            } catch (error) {
+                console.error("Error saving profile:", error);
+                cooldownStatus.textContent = "Error saving profile. Try again.";
+            }
+        });
+        
+        startDmBtn.addEventListener('click', async () => {
+            const recipientId = dmRecipientInput.value.trim();
+            dmError.textContent = '';
+
+            if (!recipientId || recipientId.length < 5) {
+                dmError.textContent = "Please enter a valid User ID.";
+                return;
+            }
+            if (recipientId === window.userId) {
+                dmError.textContent = "You cannot DM yourself.";
+                return;
+            }
+            
+            const dmId = getDMChannelId(recipientId);
+            
+            try {
+                const recipientProfileSnap = await getDoc(getProfileDocRef(recipientId));
+                if (!recipientProfileSnap.exists()) {
+                    dmError.textContent = "Error: Recipient User ID not found. They may need to log in once to create a profile.";
+                    return;
+                }
+                
+                const dmMetadataRef = doc(getPublicColRef('dm-metadata'), dmId);
+                await setDoc(dmMetadataRef, {
+                    users: [window.userId, recipientId],
+                    // A proper app would update lastMessageTimestamp here, but for now we just create the channel
+                }, { merge: true });
+
+                closeDMModal();
+                selectChannel(dmId, 'dm');
+                
+            } catch (error) {
+                console.error("Error starting DM:", error);
+                dmError.textContent = "An error occurred while setting up the DM.";
+            }
+        });
+
+        messageForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = messageInput.value.trim();
+
+            if (!text || !currentChannelId || messageInput.disabled) return;
+
+            try {
+                let messagesColRef;
+                if (currentChannelType === 'group') {
+                    messagesColRef = getPublicColRef('general-chat-messages');
+                } else if (currentChannelType === 'dm') {
+                    messagesColRef = getPublicColRef('dm-messages');
+                } else {
+                    return;
+                }
+                
+                await addDoc(messagesColRef, {
+                    channelId: currentChannelId,
+                    senderId: window.userId,
+                    text: text.substring(0, 2000),
+                    timestamp: serverTimestamp()
+                });
+
+                messageInput.value = '';
+            } catch (error) {
+                console.error("Error sending message:", error);
+            }
+        });
+        
+        initApp();
+        
+        document.querySelector('.channel-item[data-channel-id="general"]').onclick = () => selectChannel('general', 'group');
+
+    </script>
     
-  </script>
+    <script id="main-script" type="text/plain"></script>
+    
 </body>
 </html>
