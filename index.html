@@ -3,28 +3,118 @@
 <head>
   <meta charset="UTF-8" />
   <title>Chat App</title>
+  <script>
+    (function() {
+      const theme = localStorage.getItem('theme');
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark-mode');
+      }
+    })();
+  </script>
   <style>
+    /* ========================================
+     CSS Variables (Theme)
+     ========================================
+    */
+    :root {
+      --font-family: Arial, sans-serif;
+      --bg-primary: #f2f2f2;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #eeeeee;
+      --text-primary: #1a1a1a;
+      --text-secondary: #666666;
+      --border-color: #ccc;
+      --accent-color: #007bff;
+      
+      /* Bubbles */
+      --bubble-mine-bg: #007bff;
+      --bubble-mine-text: #ffffff;
+      --bubble-theirs-bg: #e6ffec;
+      --bubble-theirs-border: #d4e7d7;
+      --bubble-theirs-text: #333;
+      --bubble-theirs-name: #28a745;
+    }
+
+    /* ========================================
+     DARK MODE THEME
+     ========================================
+    */
+    html.dark-mode {
+      --bg-primary: #121212;
+      --bg-secondary: #1e1e1e;
+      --bg-tertiary: #2a2a2a;
+      --text-primary: #e0e0e0;
+      --text-secondary: #a0a0a0;
+      --border-color: #444;
+      
+      /* Bubbles */
+      --bubble-mine-bg: #375a9a;
+      --bubble-theirs-bg: #263c2b;
+      --bubble-theirs-border: #304e37;
+      --bubble-theirs-text: #d0d0d0;
+      --bubble-theirs-name: #36c25e;
+    }
+    
+    /* ========================================
+     Core Layout & Theme Application
+     ========================================
+    */
+    body, html {
+      height: 100%;
+      overflow: hidden;
+    }
+    
     body {
-      font-family: Arial, sans-serif;
-      background: #f2f2f2;
+      font-family: var(--font-family);
+      background: var(--bg-primary);
+      color: var(--text-primary);
       margin: 0;
       padding: 0;
       display: flex;
       flex-direction: column;
       height: 100vh;
+      transition: background 0.2s, color 0.2s;
     }
 
+    #header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 15px;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        flex-shrink: 0;
+    }
+    
+    #header h1 {
+        margin: 0;
+        font-size: 1.2em;
+    }
+    
+    #themeToggle {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 8px 12px;
+        cursor: pointer;
+        font-size: 16px;
+    }
+    #themeToggle:hover {
+        opacity: 0.8;
+    }
+    
     #chat {
       flex-grow: 1;
       padding: 15px;
       overflow-y: scroll;
-      background: white;
+      background: var(--bg-secondary);
     }
 
     #input-container {
       flex-shrink: 0;
-      background: white;
-      border-top: 1px solid #ccc;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
       padding: 10px;
     }
 
@@ -33,9 +123,10 @@
       padding: 10px;
       font-size: 16px;
       box-sizing: border-box;
-      border: 1px solid #ddd;
+      border: 1px solid var(--border-color);
       border-radius: 6px;
-      max-width: calc(100% - 70px); /* Leave space for send button/file */
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
     }
 
     #input-controls {
@@ -44,19 +135,18 @@
         align-items: center;
     }
 
-    /* --- New: Typing Indicator Style --- */
     #typingIndicator {
         font-style: italic;
-        color: #888;
+        color: var(--text-secondary);
         padding: 5px 15px 0;
         min-height: 20px;
         font-size: 14px;
+        background: var(--bg-secondary);
     }
-
-    /* --- File Upload Button Style --- */
-    .file-upload-label {
-        background: #ccc;
-        color: #333;
+    
+    .button-label {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
         padding: 10px;
         border-radius: 6px;
         cursor: pointer;
@@ -64,34 +154,47 @@
         text-align: center;
         width: 60px;
         flex-shrink: 0;
+        border: 1px solid var(--border-color);
     }
-    .file-upload-label:hover {
-        background: #bbb;
+    .button-label:hover {
+        opacity: 0.8;
     }
     #fileInput {
         display: none;
     }
     
-    /* --- Message Styles for Profiling and Bubbles --- */
-
+    /* ========================================
+     Message & Media Styles (Uniform Sizing)
+     ========================================
+    */
     .message-row {
       display: flex;
       margin-bottom: 15px;
     }
 
     .message-content {
-      /* Main bubble styling */
       padding: 8px 12px;
       border-radius: 18px;
       max-width: 70%;
       word-wrap: break-word;
     }
     
-    .message-content img, .message-content video {
-        max-width: 100%;
-        height: auto;
+    /* UNIFORM MEDIA CONTAINER STYLING */
+    .media-container {
+        width: 100%;
+        max-width: 300px; /* Constrain max width for chat window */
+        height: 200px;     /* Fixed height for uniform look */
+        border-radius: 8px;
+        overflow: hidden;
+        margin-top: 4px;
+        background: var(--bg-tertiary);
+    }
+    
+    .media-container img, .media-container video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* Fill the container, cropping if necessary */
         display: block;
-        border-radius: 4px;
     }
 
     .message-info {
@@ -102,42 +205,37 @@
 
     /* Message Sent by YOU (client) */
     .message-row.mine {
-      justify-content: flex-end; /* Push to the right */
+      justify-content: flex-end;
     }
-
     .message-row.mine .message-info {
         text-align: right;
-        color: #007bff; /* Blue for my name */
+        color: var(--accent-color);
     }
-
     .message-row.mine .message-content {
-      background: #007bff; /* Blue bubble */
-      color: white;
+      background: var(--bubble-mine-bg);
+      color: var(--bubble-mine-text);
       border-bottom-right-radius: 4px;
     }
     .message-row.mine .message-content a {
         color: #fff;
     }
 
-
     /* Message Sent by OTHERS */
     .message-row.theirs {
-      justify-content: flex-start; /* Stay on the left */
+      justify-content: flex-start;
     }
-
     .message-row.theirs .message-info {
         text-align: left;
-        color: #28a745; /* Green for others' names */
+        color: var(--bubble-theirs-name);
     }
-
     .message-row.theirs .message-content {
-      background: #e6ffec; /* Light green bubble */
-      color: #333;
-      border: 1px solid #d4e7d7;
+      background: var(--bubble-theirs-bg);
+      color: var(--bubble-theirs-text);
+      border: 1px solid var(--bubble-theirs-border);
       border-bottom-left-radius: 4px;
     }
     .message-row.theirs .message-content a {
-        color: #007bff;
+        color: var(--accent-color);
     }
 
     /* System Messages */
@@ -148,19 +246,106 @@
     .message-row.system .message-content {
       background: none;
       font-style: italic;
-      color: #666;
+      color: var(--text-secondary);
       max-width: 100%;
-      border-radius: 0;
       padding: 0;
     }
+    
+    /* ========================================
+     Modals (Name & Tenor)
+     ========================================
+    */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+    }
+    .modal-content {
+        background: var(--bg-secondary);
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        color: var(--text-primary);
+        width: 90%;
+        max-width: 500px;
+    }
+    .modal-content h2 {
+        margin-top: 0;
+        font-size: 1.5em;
+    }
+    .modal-input {
+        padding: 10px;
+        margin: 15px 0;
+        width: calc(100% - 22px);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+    }
+    .modal-button {
+        padding: 10px 20px;
+        background: var(--accent-color);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    /* Tenor Modal Specifics */
+    #tenorModal .modal-content {
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+    }
+    #tenorSearchInput {
+        width: calc(100% - 22px);
+        margin-bottom: 15px;
+    }
+    #tenorResultsGrid {
+        flex-grow: 1;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 5px;
+        overflow-y: scroll;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        padding: 5px;
+        background: var(--bg-tertiary);
+        margin-bottom: 15px;
+    }
+    #tenorResultsGrid img {
+        width: 100%;
+        height: 100px;
+        object-fit: cover;
+        cursor: pointer;
+        border-radius: 4px;
+    }
+    
   </style>
 </head>
 <body>
-  <div id="namePrompt" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 100;">
-    <div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
-      <h2 style="margin-top: 0; font-size: 1.5em;">Choose a Display Name</h2>
-      <input id="nameInput" type="text" placeholder="Your Name" style="padding: 10px; margin: 15px 0; width: 250px; border: 1px solid #ccc; border-radius: 4px;" maxlength="20" />
-      <button id="nameSubmit" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Join Chat</button>
+  <div id="header">
+      <h1>Class Chat</h1>
+      <button id="themeToggle">🌙 Dark</button>
+  </div>
+
+  <div id="namePrompt" class="modal-overlay">
+    <div class="modal-content">
+      <h2 style="margin-top: 0;">Choose a Display Name</h2>
+      <input id="nameInput" type="text" placeholder="Your Name" class="modal-input" maxlength="20" />
+      <button id="nameSubmit" class="modal-button">Join Chat</button>
+    </div>
+  </div>
+  <div id="tenorModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+      <h2>Search for a GIF</h2>
+      <input id="tenorSearchInput" type="text" placeholder="Search Tenor (e.g., 'cat fail')" class="modal-input" />
+      <div id="tenorResultsGrid"></div>
+      <button id="tenorClose" class="modal-button" style="background: #dc3545;">Close</button>
     </div>
   </div>
   <div id="chat"></div>
@@ -170,7 +355,9 @@
     <div id="input-controls">
         <input id="messageInput" type="text" placeholder="Type a message (max 500 chars)..." disabled maxlength="500"/>
         
-        <label for="fileInput" class="file-upload-label">🖼️ / 🎬</label>
+        <button id="gifButton" class="button-label" style="width: 40px; font-weight: bold;">GIF</button>
+        
+        <label for="fileInput" class="button-label">🖼️/🎬</label>
         <input type="file" id="fileInput" accept="image/gif, image/png, image/jpeg, video/mp4" />
     </div>
   </div>
@@ -183,16 +370,37 @@
     const nameSubmit = document.getElementById("nameSubmit");
     const fileInput = document.getElementById("fileInput");
     const typingIndicator = document.getElementById("typingIndicator");
+    const themeToggle = document.getElementById("themeToggle");
+    const gifButton = document.getElementById("gifButton");
+    const tenorModal = document.getElementById("tenorModal");
+    const tenorSearchInput = document.getElementById("tenorSearchInput");
+    const tenorResultsGrid = document.getElementById("tenorResultsGrid");
+    const tenorClose = document.getElementById("tenorClose");
+    
+    // YOUR TENOR API KEY
+    const TENOR_API_KEY = "AIzaSyBmp9odqbiQhHC2I6KbhiScnsL368pzJCk";
     
     let userName = "Anonymous";
     let clientId = Math.random().toString(36).substring(2, 9);
     
     let typingTimeout;
-    const typingUsers = new Set(); // Stores names of users who are typing
-
+    const typingUsers = new Set();
+    
+    // --- Theme Toggle Logic ---
+    themeToggle.addEventListener('click', () => {
+        const isDarkMode = document.documentElement.classList.toggle('dark-mode');
+        localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+        themeToggle.textContent = isDarkMode ? '☀️ Light' : '🌙 Dark';
+    });
+    
+    // Set initial toggle text
+    document.addEventListener('DOMContentLoaded', () => {
+        const isDarkMode = document.documentElement.classList.contains('dark-mode');
+        themeToggle.textContent = isDarkMode ? '☀️ Light' : '🌙 Dark';
+    });
+    
     // --- Message Rendering Function ---
     function renderMessage(data) {
-      // Ignore typing signals
       if (data.type === "typing") {
           updateTypingIndicator(data);
           return;
@@ -223,35 +431,40 @@
         row.appendChild(info);
       }
       
-      // Handle file/media content
+      // Handle file/media content (including Tenor GIFs)
       if (data.fileUrl) {
-          if (data.fileType.startsWith('image/')) {
+          const mediaContainer = document.createElement('div');
+          mediaContainer.classList.add('media-container');
+          
+          if (data.fileType.startsWith('image/') || data.fileType === 'image/gif') {
               const img = document.createElement('img');
               img.src = data.fileUrl;
-              img.alt = 'Uploaded image';
-              content.appendChild(img);
+              img.alt = 'Uploaded image or GIF';
+              mediaContainer.appendChild(img);
           } else if (data.fileType.startsWith('video/')) {
               const video = document.createElement('video');
               video.src = data.fileUrl;
               video.controls = true;
-              content.appendChild(video);
+              video.loop = true;
+              video.autoplay = true; // GIFs/Videos should autoplay if possible
+              video.muted = true;
+              mediaContainer.appendChild(video);
           }
+          content.appendChild(mediaContainer);
       } 
       
-      // Handle text content (always present, even if empty, for bubbles)
+      // Handle text content 
       if (data.text && data.text.trim()) {
           const textNode = document.createTextNode(data.text);
           content.appendChild(textNode);
       } else if (!data.fileUrl) {
-           // Skip rendering if no text and no file
            return; 
       }
 
-      // Order the elements correctly for styling (name then content)
+      // Order the elements correctly
       if (data.sender !== "system") {
           row.appendChild(content);
       } else {
-          // System message: only content (no info)
           row.appendChild(content);
       }
       
@@ -259,7 +472,7 @@
       chat.scrollTop = chat.scrollHeight;
     }
     
-    // --- Typing Indicator Logic ---
+    // --- Typing Indicator Logic (Unchanged) ---
     function updateTypingIndicator(data) {
         if (data.isTyping) {
             if (data.clientId !== clientId) {
@@ -297,6 +510,67 @@
         }
     }
     
+    // --- Tenor API Functions ---
+    let searchTimeout;
+
+    function searchTenor(query) {
+        if (!query) return;
+        
+        const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=${TENOR_API_KEY}&client_key=my_chat_app&limit=20&media_filter=tinygif,tinymp4`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                tenorResultsGrid.innerHTML = ''; // Clear previous results
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach(gif => {
+                        const media = gif.media_formats.tinygif || gif.media_formats.tinymp4;
+                        if (media) {
+                            const img = document.createElement('img');
+                            img.src = media.url;
+                            img.alt = gif.content_description;
+                            img.dataset.url = media.url;
+                            img.dataset.type = media.url.endsWith('.mp4') ? 'video/mp4' : 'image/gif';
+                            
+                            img.addEventListener('click', (e) => {
+                                // Send selected GIF
+                                sendFileMessage(e.target.dataset.url, e.target.dataset.type);
+                                tenorModal.style.display = 'none';
+                            });
+                            tenorResultsGrid.appendChild(img);
+                        }
+                    });
+                } else {
+                    tenorResultsGrid.textContent = 'No GIFs found.';
+                }
+            })
+            .catch(error => {
+                console.error('Tenor API Error:', error);
+                tenorResultsGrid.textContent = 'Error fetching GIFs.';
+            });
+    }
+
+    // --- File/Media Sending Function (Reusable for Uploads and Tenor) ---
+    function sendFileMessage(url, type) {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            // Clear typing status
+            sendTypingStatus(false);
+            clearTimeout(typingTimeout);
+            messageInput.isTyping = false;
+            
+            // Send a structured message with file URL
+            socket.send(JSON.stringify({ 
+                type: "file", 
+                fileUrl: url, // Server expects fileUrl for direct media link
+                fileType: type,
+                name: userName, 
+                clientId: clientId 
+            }));
+        } else {
+            alert("Cannot send file/GIF. Not connected to chat.");
+        }
+    }
+
     // --- WebSocket Setup (Unchanged) ---
     const protocol = location.protocol === "https:" ? "wss" : "ws";
     let socket;
@@ -305,8 +579,6 @@
         const host = location.host || location.hostname; 
         const wsUrl = `${protocol}://${host}`;
         
-        console.log(`Attempting to connect to: ${wsUrl}`); 
-
         socket = new WebSocket(wsUrl);
         
         socket.addEventListener("open", () => {
@@ -325,7 +597,7 @@
             return;
           }
 
-          renderMessage(data); // Call renderMessage for ALL message types
+          renderMessage(data); 
         });
 
         socket.addEventListener("close", () => {
@@ -359,81 +631,91 @@
     // Typing listener
     messageInput.addEventListener("input", () => {
         if (socket && socket.readyState === WebSocket.OPEN) {
-            // Clear previous timeout
             clearTimeout(typingTimeout);
-            
-            // Send typing signal immediately if not already typing
             if (!messageInput.isTyping) {
                 sendTypingStatus(true);
                 messageInput.isTyping = true;
             }
-            
-            // Set timeout to send 'stopped typing' signal
             typingTimeout = setTimeout(() => {
                 sendTypingStatus(false);
                 messageInput.isTyping = false;
-            }, 1500); // 1.5 seconds delay
+            }, 1500);
         }
     });
     
     // Message send listener (Text)
     messageInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && messageInput.value.trim() !== "" && socket.readyState === WebSocket.OPEN) {
-        const text = messageInput.value.trim().substring(0, 500); // Enforce max length on send
+        const text = messageInput.value.trim().substring(0, 500); 
         
-        // Send 'stopped typing' immediately
         sendTypingStatus(false);
         clearTimeout(typingTimeout);
         messageInput.isTyping = false;
         
-        // Send a structured message
         socket.send(JSON.stringify({ type: "chat", text: text, name: userName, clientId: clientId }));
         messageInput.value = "";
       }
     });
     
-    // File send listener
+    // File upload listener (Uses FileReader and Base64 for compatibility)
     fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        const maxFileSize = 10 * 1024 * 1024; // 10MB limit for client side
+        const maxFileSize = 10 * 1024 * 1024; // 10MB limit
+        const allowedMimes = ['image/gif', 'image/png', 'image/jpeg', 'video/mp4'];
         
         if (file.size > maxFileSize) {
             alert("File size exceeds 10MB limit.");
-            fileInput.value = ''; // Clear input
+            fileInput.value = '';
             return;
         }
+        if (!allowedMimes.includes(file.type)) {
+             alert("Unsupported file type. Only GIF, PNG, JPG, and MP4 are allowed.");
+             fileInput.value = '';
+             return;
+        }
 
+        // Use FileReader to convert file to Data URL (Base64)
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            // Send a structured file message using the Data URL as the source
+            sendFileMessage(event.target.result, file.type);
+            fileInput.value = ''; // Clear input
+        };
+        reader.readAsDataURL(file);
+    });
+    
+    // --- Tenor Modal Listeners ---
+    gifButton.addEventListener('click', () => {
         if (socket && socket.readyState === WebSocket.OPEN) {
-            // Clear typing status if sending a file
-            sendTypingStatus(false);
-            clearTimeout(typingTimeout);
-            messageInput.isTyping = false;
-            
-            // 1. Convert file to Base64 (simple method for small files via WebSocket)
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                const base64Data = event.target.result; // Data URL (base64)
-                
-                // 2. Send structured file message
-                socket.send(JSON.stringify({ 
-                    type: "file", 
-                    file: base64Data, 
-                    fileName: file.name,
-                    fileType: file.type,
-                    name: userName, 
-                    clientId: clientId 
-                }));
-                
-                fileInput.value = ''; // Clear input
-            };
-            reader.readAsDataURL(file);
+            tenorModal.style.display = 'flex';
+            tenorResultsGrid.innerHTML = '';
+            tenorSearchInput.value = '';
+            // Load initial trending GIFs
+            searchTenor('trending');
+            tenorSearchInput.focus();
         } else {
-            alert("Cannot send file. Not connected to chat.");
-            fileInput.value = '';
+            alert("You must be connected to the chat to send GIFs.");
         }
     });
+
+    tenorClose.addEventListener('click', () => {
+        tenorModal.style.display = 'none';
+    });
+
+    tenorSearchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            const query = tenorSearchInput.value.trim();
+            if (query) {
+                searchTenor(query);
+            } else {
+                searchTenor('trending'); // Default back to trending
+            }
+        }, 500); // Debounce search
+    });
+    
   </script>
 </body>
 </html>
